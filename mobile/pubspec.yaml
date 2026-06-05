@@ -1,0 +1,81 @@
+name: trashgo
+description: TrashGo — On-Demand Waste Pickup Platform
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Navigation
+  go_router: ^13.0.1
+
+  # Networking
+  dio: ^5.4.0
+  retrofit: ^4.1.0
+
+  # Firebase
+  firebase_core: ^2.24.2
+  firebase_messaging: ^14.7.10
+  firebase_analytics: ^10.7.4
+
+  # Maps & Location
+  google_maps_flutter: ^2.5.3
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+
+  # Local storage
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
+
+  # Real-time
+  socket_io_client: ^2.0.3+1
+
+  # UI components
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  lottie: ^2.7.0
+  fl_chart: ^0.66.0
+  flutter_rating_bar: ^4.0.1
+  pin_code_fields: ^8.0.1
+  image_picker: ^1.0.7
+
+  # Utilities
+  intl: ^0.18.1
+  url_launcher: ^6.2.3
+  permission_handler: ^11.2.0
+  connectivity_plus: ^5.0.2
+  package_info_plus: ^5.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.8
+  riverpod_generator: ^2.3.9
+  retrofit_generator: ^8.1.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
