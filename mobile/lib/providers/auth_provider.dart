@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
@@ -35,13 +36,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<bool> loginCustomer({required String emailOrPhone, required String password, String? fcmToken}) async {
+  Future<bool> login({required String emailOrPhone, required String password, required String role, String? fcmToken}) async {
     state = const AuthState(isLoading: true);
     try {
       final isEmail = emailOrPhone.contains('@');
       final res = await ApiService.instance.login({
         if (isEmail) 'email': emailOrPhone else 'phone': emailOrPhone,
         'password': password,
+        'role': role,
         if (fcmToken != null) 'fcm_token': fcmToken,
       });
       return _handleAuthResponse(res);
@@ -115,6 +117,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractError(dynamic e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['error'] != null) return data['error'] as String;
+      return e.message ?? 'Something went wrong';
+    }
     if (e is Exception) return e.toString().replaceAll('Exception: ', '');
     return 'Something went wrong';
   }

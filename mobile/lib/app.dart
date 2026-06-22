@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,23 +21,42 @@ import 'presentation/screens/rider/earnings_screen.dart';
 import 'presentation/screens/shared/notifications_screen.dart';
 import 'presentation/screens/shared/profile_screen.dart';
 
-class TrashGoApp extends ConsumerWidget {
+class TrashGoApp extends ConsumerStatefulWidget {
   const TrashGoApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
+  ConsumerState<TrashGoApp> createState() => _TrashGoAppState();
+}
 
-    final router = GoRouter(
+class _TrashGoAppState extends ConsumerState<TrashGoApp> {
+  late final GoRouter _router;
+  late final ValueNotifier<bool> _authRefresh;
+  StreamSubscription? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // FIX: Create one router instance and keep it alive across auth state changes.
+    // A ValueNotifier is used as GoRouter's refreshListenable so redirects run
+    // whenever auth changes without rebuilding/replacing the entire router.
+    _authRefresh = ValueNotifier(false);
+    _authSub = ref.read(authProvider.notifier).stream.listen((_) {
+      _authRefresh.value = !_authRefresh.value;
+    });
+
+    _router = GoRouter(
       initialLocation: '/splash',
+      refreshListenable: _authRefresh,
       redirect: (ctx, state) {
-        final loggedIn = authState.isAuthenticated;
-        final onAuth   = state.matchedLocation.startsWith('/auth') ||
-                         state.matchedLocation == '/splash';
+        final auth = ref.read(authProvider);
+        final loggedIn = auth.isAuthenticated;
+        final onAuth = state.matchedLocation.startsWith('/auth') ||
+                       state.matchedLocation == '/splash';
 
         if (!loggedIn && !onAuth) return '/auth/role-select';
-        if (loggedIn && onAuth)  {
-          return authState.user!.isRider ? '/rider/home' : '/home';
+        if (loggedIn && onAuth) {
+          return auth.user!.isRider ? '/rider/home' : '/home';
         }
         return null;
       },
@@ -65,11 +85,22 @@ class TrashGoApp extends ConsumerWidget {
         GoRoute(path: '/profile',          builder: (_, __) => const ProfileScreen()),
       ],
     );
+  }
 
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    _authRefresh.dispose();
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'TrashGo',
       theme: AppTheme.light,
-      routerConfig: router,
+      routerConfig: _router,
       debugShowCheckedModeBanner: false,
     );
   }

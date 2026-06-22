@@ -14,8 +14,8 @@ CREATE TABLE users (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   role            user_role NOT NULL DEFAULT 'customer',
   full_name       VARCHAR(150) NOT NULL,
-  email           VARCHAR(255) UNIQUE NOT NULL,
-  phone           VARCHAR(20) UNIQUE NOT NULL,
+  email           VARCHAR(255) NOT NULL,
+  phone           VARCHAR(20) NOT NULL,
   password_hash   VARCHAR(255) NOT NULL,
   profile_photo   VARCHAR(500),
   fcm_token       VARCHAR(500),           -- Firebase push token
@@ -23,6 +23,11 @@ CREATE TABLE users (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- FIX: email/phone uniqueness is scoped by role so a customer and rider can share
+-- the same contact details, while still preventing duplicates within one role.
+CREATE UNIQUE INDEX idx_users_email_role ON users (LOWER(email), role);
+CREATE UNIQUE INDEX idx_users_phone_role ON users (phone, role);
 
 -- Rider-specific profile
 CREATE TABLE rider_profiles (

@@ -20,21 +20,42 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
     final earnings = ref.watch(_earningsProvider(_period));
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('My Earnings'), backgroundColor: AppColors.primary),
+      appBar: AppBar(
+        title: const Text('My Earnings'),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+      ),
       body: Column(children: [
-        // Period tabs
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(children: [
-            for (final p in ['today', 'week', 'month', 'all'])
-              Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(
-                label: Text(p.toUpperCase()),
-                selected: _period == p,
-                onSelected: (_) => setState(() => _period = p),
-                selectedColor: AppColors.primary.withOpacity(0.2),
-              )),
-          ]),
+        // ── Period segmented control
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: const Color(0xFFF1F3F1), borderRadius: BorderRadius.circular(12)),
+          child: Row(children: ['today', 'week', 'month', 'all'].map((p) {
+            final sel = _period == p;
+            return Expanded(child: GestureDetector(
+              onTap: () => setState(() => _period = p),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: sel ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: sel ? const [BoxShadow(color: Color(0x15000000), blurRadius: 4, offset: Offset(0, 1))] : null,
+                ),
+                child: Text(
+                  p == 'today' ? 'Today' : p[0].toUpperCase() + p.substring(1),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                    color: sel ? AppColors.primary : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ));
+          }).toList()),
         ),
 
         Expanded(child: earnings.when(
@@ -43,34 +64,99 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
           data: (data) {
             final s = data['summary'] ?? {};
             final recent = data['recent_earnings'] as List? ?? [];
-            return ListView(padding: const EdgeInsets.all(16), children: [
-              // Summary cards
-              Row(children: [
-                Expanded(child: _EarnCard(label: 'Total Jobs', value: '${s['total_jobs'] ?? 0}', icon: Icons.work_outline, color: Colors.blue)),
-                const SizedBox(width: 12),
-                Expanded(child: _EarnCard(label: 'Net Earnings', value: 'GHS ${double.parse((s['total_net'] ?? 0).toString()).toStringAsFixed(2)}', icon: Icons.attach_money, color: Colors.green)),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: _EarnCard(label: 'Gross', value: 'GHS ${double.parse((s['total_gross'] ?? 0).toString()).toStringAsFixed(2)}', icon: Icons.monetization_on_outlined, color: AppColors.primary)),
-                const SizedBox(width: 12),
-                Expanded(child: _EarnCard(label: 'Commission', value: 'GHS ${double.parse((s['total_commission'] ?? 0).toString()).toStringAsFixed(2)}', icon: Icons.percent, color: Colors.orange)),
-              ]),
+            return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 16), children: [
+              // ── Summary card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
+                ),
+                child: Column(children: [
+                  const Text('Net Earnings', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'GHS ${double.parse((s['total_net'] ?? 0).toString()).toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: AppColors.primary),
+                  ),
+                  Text('from ${s['total_jobs'] ?? 0} jobs', style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+                  const SizedBox(height: 20),
+                  Row(children: [
+                    _StatChip(
+                      label: 'Gross',
+                      value: 'GHS ${double.parse((s['total_gross'] ?? 0).toString()).toStringAsFixed(2)}',
+                      color: AppColors.infoBg,
+                      textColor: AppColors.info,
+                    ),
+                    const SizedBox(width: 8),
+                    _StatChip(
+                      label: 'Commission',
+                      value: 'GHS ${double.parse((s['total_commission'] ?? 0).toString()).toStringAsFixed(2)}',
+                      color: AppColors.errorBg,
+                      textColor: AppColors.error,
+                    ),
+                    const SizedBox(width: 8),
+                    _StatChip(
+                      label: 'Net',
+                      value: 'GHS ${double.parse((s['total_net'] ?? 0).toString()).toStringAsFixed(2)}',
+                      color: AppColors.primaryBg,
+                      textColor: AppColors.primary,
+                    ),
+                  ]),
+                ]),
+              ),
 
               const SizedBox(height: 24),
-              const Text('Recent Jobs', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text('Recent Jobs', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimary)),
               const SizedBox(height: 12),
+
               if (recent.isEmpty)
-                const Center(child: Padding(padding: EdgeInsets.all(20), child: Text('No earnings yet', style: TextStyle(color: AppColors.textSecondary)))),
-              ...recent.map((e) => ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.delete_outline, color: AppColors.primary, size: 20)),
-                title: Text(e['pickup_address'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                subtitle: Text(e['waste_type'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('GHS ${double.parse(e['net'].toString()).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
-                  Text(DateFormat('dd MMM').format(DateTime.parse(e['created_at'])), style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                ]),
-              )).toList(),
+                const Center(child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text('No earnings yet', style: TextStyle(color: AppColors.textSecondary)),
+                ))
+              else
+                // ── Recent jobs card
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
+                  ),
+                  child: Column(children: recent.asMap().entries.map((entry) {
+                    final e = entry.value;
+                    final last = entry.key == recent.length - 1;
+                    return Column(children: [
+                      Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(color: AppColors.primaryBg, borderRadius: BorderRadius.circular(10)),
+                            child: const Icon(Icons.delete_outline, color: AppColors.primary, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(e['pickup_address'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${e['waste_type'] ?? ''} · ${DateFormat('dd MMM').format(DateTime.parse(e['created_at']))}',
+                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                          ])),
+                          Text(
+                            '+GHS ${double.parse(e['net'].toString()).toStringAsFixed(2)}',
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary, fontSize: 14),
+                          ),
+                        ]),
+                      ),
+                      if (!last) const Divider(height: 1, color: Color(0xFFF4F4F4)),
+                    ]);
+                  }).toList()),
+                ),
             ]);
           },
         )),
@@ -79,20 +165,19 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
   }
 }
 
-class _EarnCard extends StatelessWidget {
+class _StatChip extends StatelessWidget {
   final String label, value;
-  final IconData icon;
-  final Color color;
-  const _EarnCard({required this.label, required this.value, required this.icon, required this.color});
+  final Color color, textColor;
+  const _StatChip({required this.label, required this.value, required this.color, required this.textColor});
+
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)]),
+  Widget build(BuildContext context) => Expanded(child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, color: color, size: 24),
-      const SizedBox(height: 8),
-      Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-      Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      Text(value, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 2),
+      Text(label, style: TextStyle(fontSize: 11, color: textColor.withOpacity(0.75))),
     ]),
-  );
+  ));
 }

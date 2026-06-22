@@ -79,8 +79,11 @@ class ApiService {
   Future<Map<String, dynamic>> getEarnings({String period = 'all'}) =>
       _get('/riders/earnings', params: {'period': period});
 
-  Future<Map<String, dynamic>> getNearbyOrders(double lat, double lng) =>
-      _get('/riders/nearby-orders', params: {'lat': lat, 'lng': lng});
+  Future<Map<String, dynamic>> getNearbyOrders({double? lat, double? lng}) =>
+      _get('/riders/nearby-orders', params: {
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+      });
 
   // ── Rewards ────────────────────────────────────────────────
   Future<Map<String, dynamic>> getWallet() => _get('/rewards/wallet');

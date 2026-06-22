@@ -104,37 +104,57 @@ class _ActivePickupScreenState extends ConsumerState<ActivePickupScreen> {
       case 'rider_en_route':
         return CustomButton(text: '📍 Mark Arrived', isLoading: _updating, onPressed: () => _updateStatus('rider_arrived'));
       case 'rider_arrived':
-        return Column(children: [
-          const Text('Select Waste Size', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 10),
-          Row(children: ['small', 'medium', 'large'].map((s) => Expanded(child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: GestureDetector(
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(color: AppColors.tealBg, borderRadius: BorderRadius.circular(20)),
+            child: const Text('Arrived at location', style: TextStyle(color: AppColors.teal, fontWeight: FontWeight.w600, fontSize: 13)),
+          ),
+          const SizedBox(height: 16),
+          const Text('Confirm the waste size', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const SizedBox(height: 12),
+          Row(children: ['small', 'medium', 'large'].map((s) {
+            final sel = _selectedSize == s;
+            return Expanded(child: GestureDetector(
               onTap: () => setState(() => _selectedSize = s),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  color: _selectedSize == s ? AppColors.primary : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _selectedSize == s ? AppColors.primary : AppColors.divider),
+                  color: sel ? AppColors.primaryBg : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: sel ? AppColors.primary : const Color(0xFFE8E8E8), width: sel ? 1.5 : 1),
                 ),
-                child: Text(s.toUpperCase(), textAlign: TextAlign.center,
-                  style: TextStyle(color: _selectedSize == s ? Colors.white : AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                child: Column(children: [
+                  Icon(Icons.delete_outline, color: sel ? AppColors.primary : AppColors.textSecondary, size: 26),
+                  const SizedBox(height: 6),
+                  Text(s[0].toUpperCase() + s.substring(1), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: sel ? AppColors.primary : AppColors.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text(s == 'small' ? '~GHS 8-12' : s == 'medium' ? '~GHS 14-20' : '~GHS 22-35', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                ]),
               ),
-            ),
-          ))).toList()),
+            ));
+          }).toList()),
           const SizedBox(height: 14),
           CustomButton(
-            text: '✅ Confirm Waste Size',
+            text: 'Confirm Size & Send Price',
             isLoading: _updating,
             onPressed: _selectedSize == null ? null : () => _updateStatus('size_confirmed', wasteSize: _selectedSize),
           ),
+          const SizedBox(height: 10),
+          Center(child: GestureDetector(
+            onTap: () {},
+            child: const Text('Report an issue', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 13)),
+          )),
         ]);
       case 'size_confirmed':
-        return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-          child: const Text('⏳ Waiting for customer to approve price...', style: TextStyle(color: Colors.orange), textAlign: TextAlign.center));
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(12)),
+          child: const Text('Waiting for customer to approve price...', style: TextStyle(color: AppColors.warning), textAlign: TextAlign.center),
+        );
       case 'price_approved':
-        return const Text('⏳ Waiting for customer payment...', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary));
+        return const Text('Waiting for customer payment...', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textSecondary));
       case 'in_progress':
         return CustomButton(text: '🏁 Complete Pickup', isLoading: _updating, onPressed: _complete, color: Colors.green);
       case 'completed':
@@ -148,73 +168,94 @@ class _ActivePickupScreenState extends ConsumerState<ActivePickupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: const Text('Active Pickup'), backgroundColor: AppColors.primary,
-        actions: [IconButton(icon: const Icon(Icons.navigation_outlined), onPressed: _openNavigation)]),
+      appBar: AppBar(
+        title: const Text('Active Pickup'),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.navigation_outlined, color: AppColors.primary),
+            onPressed: _openNavigation,
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _order == null ? const Center(child: Text('Order not found'))
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Progress stepper
-                Card(child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(children: _steps.asMap().entries.map((e) {
-                    final done    = _steps.indexWhere((s) => s['status'] == _order!.status) >= e.key;
-                    final current = _order!.status == e.value['status'];
-                    return Row(children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: done ? AppColors.primary : AppColors.divider,
-                        child: Icon(e.value['icon'] as IconData, size: 16, color: Colors.white),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(e.value['label'] as String, style: TextStyle(fontWeight: current ? FontWeight.bold : FontWeight.normal, color: done ? AppColors.primary : AppColors.textSecondary)),
-                      if (current) ...[const Spacer(), Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle))],
-                      if (e.key < _steps.length - 1) const SizedBox(height: 30),
-                    ]);
-                  }).expand((w) => [w, const Padding(padding: EdgeInsets.only(left: 16), child: SizedBox(height: 1, width: double.infinity))]).toList(),
-                  ),
-                )),
-
-                const SizedBox(height: 16),
-                Card(child: Padding(
-                  padding: const EdgeInsets.all(16),
+          : _order == null
+              ? const Center(child: Text('Order not found'))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Customer Info', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      const Icon(Icons.person_outline, size: 18, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text(_order!.customerName ?? 'Customer'),
-                    ]),
-                    const SizedBox(height: 6),
-                    Row(children: [
-                      const Icon(Icons.location_on_outlined, size: 18, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(_order!.pickupAddress, style: const TextStyle(fontSize: 13))),
-                    ]),
-                    const SizedBox(height: 6),
-                    Row(children: [
-                      const Icon(Icons.delete_outline, size: 18, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text(_order!.wasteTypeLabel),
-                    ]),
-                    if (_order!.finalPrice != null) ...[
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        const Icon(Icons.attach_money, size: 18, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Text('GHS ${_order!.finalPrice!.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                      ]),
-                    ],
-                  ]),
-                )),
+                    // ── Progress stepper: 4-step segmented bar
+                    Builder(builder: (_) {
+                      final idx = _steps.indexWhere((s) => s['status'] == _order!.status);
+                      final currentIdx = idx < 0 ? 0 : idx;
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: _steps.asMap().entries.map((e) {
+                          final done = e.key <= currentIdx;
+                          return Expanded(child: Container(
+                            height: 5,
+                            margin: EdgeInsets.only(right: e.key < _steps.length - 1 ? 4 : 0),
+                            decoration: BoxDecoration(
+                              color: done ? AppColors.primary : const Color(0xFFE2E2E2),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ));
+                        }).toList()),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Step ${currentIdx + 1} of ${_steps.length} · ${_steps[currentIdx]['label']}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ]);
+                    }),
+                    const SizedBox(height: 20),
 
-                const Spacer(),
-                _buildActionButton(),
-              ]),
-            ),
+                    // ── Customer info card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Customer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          const CircleAvatar(radius: 18, backgroundColor: AppColors.primaryBg, child: Icon(Icons.person_outline, color: AppColors.primary, size: 18)),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(_order!.customerName ?? 'Customer', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+                        ]),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(_order!.pickupAddress, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+                        ]),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          const Icon(Icons.delete_outline, color: AppColors.primary, size: 16),
+                          const SizedBox(width: 6),
+                          Text(_order!.wasteTypeLabel, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        ]),
+                        if (_order!.finalPrice != null) ...[
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            const Icon(Icons.attach_money, color: Colors.green, size: 16),
+                            const SizedBox(width: 6),
+                            Text('GHS ${_order!.finalPrice!.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.green, fontSize: 14)),
+                          ]),
+                        ],
+                      ]),
+                    ),
+
+                    const SizedBox(height: 40),
+                    _buildActionButton(),
+                    const SizedBox(height: 20),
+                  ]),
+                ),
     );
   }
 }

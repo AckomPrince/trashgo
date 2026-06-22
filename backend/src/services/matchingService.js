@@ -30,8 +30,13 @@ function haversine(lat1, lng1, lat2, lng2) {
  *            estimate so we never miss a rider near the edge.
  */
 async function findNearbyRiders(pickupLat, pickupLng, maxKm = 10, limit = 5) {
+  // FIX: pg returns numeric columns as strings; coerce to float before arithmetic
+  // so the `+` delta operation does numeric addition instead of string concat.
+  const lat = parseFloat(pickupLat);
+  const lng = parseFloat(pickupLng);
+
   const latDelta = maxKm / 111.0;
-  const lngDelta = maxKm / (111.0 * Math.cos((pickupLat * Math.PI) / 180));
+  const lngDelta = maxKm / (111.0 * Math.cos((lat * Math.PI) / 180));
 
   const { rows } = await db.query(
     `SELECT u.id, u.full_name, u.phone, u.fcm_token,
@@ -45,8 +50,8 @@ async function findNearbyRiders(pickupLat, pickupLng, maxKm = 10, limit = 5) {
        AND rp.current_lat  BETWEEN $1 AND $2
        AND rp.current_lng  BETWEEN $3 AND $4`,
     [
-      pickupLat - latDelta, pickupLat + latDelta,
-      pickupLng - lngDelta, pickupLng + lngDelta,
+      lat - latDelta, lat + latDelta,
+      lng - lngDelta, lng + lngDelta,
     ]
   );
 

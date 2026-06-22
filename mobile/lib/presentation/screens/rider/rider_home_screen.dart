@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../data/services/api_service.dart';
 import '../../../data/services/socket_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../widgets/custom_button.dart';
+import '../rider/earnings_screen.dart';
+import '../shared/profile_screen.dart';
 
 class RiderHomeScreen extends ConsumerStatefulWidget {
   const RiderHomeScreen({super.key});
@@ -43,8 +43,9 @@ class _RiderHomeScreenState extends ConsumerState<RiderHomeScreen> {
 
   Future<void> _loadNearbyOrders() async {
     try {
-      final pos = await Geolocator.getCurrentPosition();
-      final res = await ApiService.instance.getNearbyOrders(pos.latitude, pos.longitude);
+      // FIX/MVP: fetch all unassigned requested orders without GPS filtering.
+      // GPS-based matching will be added in a future update.
+      final res = await ApiService.instance.getNearbyOrders();
       if (!mounted) return;
       setState(() => _pending = res['orders'] as List? ?? []);
     } catch (_) {}
@@ -74,22 +75,55 @@ class _RiderHomeScreenState extends ConsumerState<RiderHomeScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text('🗑️ New Pickup Request'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        title: Row(children: [
+          const Icon(Icons.local_shipping_outlined, color: AppColors.primary, size: 22),
+          const SizedBox(width: 10),
+          const Text('New Pickup Request', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        ]),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${data['distance_km']} km away'),
-          const SizedBox(height: 4),
-          Text('Type: ${data['waste_type']}'),
-          const SizedBox(height: 4),
-          Text(data['pickup_address'] ?? '', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: AppColors.primaryBg, borderRadius: BorderRadius.circular(20)),
+            child: Text(
+            data['distance_km'] != null ? '${data['distance_km']} km away' : 'Open request',
+            style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            const Icon(Icons.delete_outline, color: AppColors.textSecondary, size: 16),
+            const SizedBox(width: 6),
+            Text('${data['waste_type']}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 16),
+            const SizedBox(width: 6),
+            Expanded(child: Text(data['pickup_address'] ?? '', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+          ]),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Decline', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Decline', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
+          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
               await _acceptOrder(data['order_id']);
             },
-            child: const Text('Accept'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              minimumSize: const Size(100, 44),
+            ),
+            child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -149,86 +183,185 @@ class _RiderHomeScreenState extends ConsumerState<RiderHomeScreen> {
     );
   }
 
-  Widget _buildHomeTab(user) => CustomScrollView(slivers: [
-    SliverAppBar(
-      pinned: true, backgroundColor: AppColors.primary,
-      title: Text('Hi, ${user.fullName.split(' ').first}!', style: const TextStyle(color: Colors.white)),
-      actions: [IconButton(icon: const Icon(Icons.notifications_outlined, color: Colors.white), onPressed: () => context.push('/notifications'))],
-    ),
-    SliverToBoxAdapter(child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Online toggle
+  Widget _buildHomeTab(user) => Scaffold(
+    backgroundColor: AppColors.background,
+    body: SafeArea(
+      child: Column(children: [
+        // ── Top bar
         Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: _isOnline ? AppColors.primary.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _isOnline ? AppColors.primary : Colors.grey),
-          ),
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Row(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_isOnline ? '🟢 You are ONLINE' : '⚫ You are OFFLINE',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _isOnline ? AppColors.primary : Colors.grey)),
-              Text(_isOnline ? 'You can receive orders' : 'Toggle to start accepting', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            ]),
-            const Spacer(),
-            _toggling
-                ? const CircularProgressIndicator()
-                : Switch(
-                    value: _isOnline,
-                    onChanged: (_) => _toggleOnline(),
-                    activeColor: AppColors.primary,
+            // Avatar + name
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: AppColors.primary,
+              child: Text(user.fullName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(user.fullName.split(' ').first, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Text(_isOnline ? 'Online · Accepting orders' : 'Offline', style: TextStyle(fontSize: 12, color: _isOnline ? AppColors.primary : AppColors.textMuted)),
+            ])),
+            // Online/offline toggle
+            GestureDetector(
+              onTap: _toggling ? null : _toggleOnline,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: 54,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: _isOnline ? AppColors.primary : const Color(0xFFCFCFCF),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Stack(children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 250),
+                    left: _isOnline ? 26 : 4,
+                    top: 4,
+                    child: Container(width: 22, height: 22, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
                   ),
+                ]),
+              ),
+            ),
           ]),
         ),
 
-        const SizedBox(height: 24),
-        if (_isOnline && _pending.isNotEmpty) ...[
-          const Text('Nearby Requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          ..._pending.map((o) => _NearbyOrderCard(order: o, onAccept: () => _acceptOrder(o['id']))),
-        ] else if (_isOnline) ...[
-          const Center(child: Padding(
-            padding: EdgeInsets.all(40),
-            child: Column(children: [
-              Icon(Icons.search, size: 48, color: AppColors.textSecondary),
-              SizedBox(height: 12),
-              Text('Looking for nearby orders...', style: TextStyle(color: AppColors.textSecondary)),
-            ]),
-          )),
-        ],
-      ]),
-    )),
-  ]);
-}
-
-class _NearbyOrderCard extends StatelessWidget {
-  final Map order;
-  final VoidCallback onAccept;
-  const _NearbyOrderCard({required this.order, required this.onAccept});
-
-  @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('${order['distance_km']} km away', style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary)),
-          Chip(label: Text((order['waste_type'] as String).toUpperCase(), style: const TextStyle(fontSize: 11)), padding: EdgeInsets.zero),
-        ]),
-        const SizedBox(height: 6),
-        Text(order['pickup_address'] ?? '', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 10),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(onPressed: onAccept, child: const Text('Accept Order')),
-        ),
+        // ── Content
+        Expanded(child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(children: [
+            // Online state: dispatch list OR offline message
+            if (_isOnline) ...[
+              if (_pending.isNotEmpty) ...[
+                const Align(alignment: Alignment.centerLeft, child: Text('Nearby Requests', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+                const SizedBox(height: 12),
+                ..._pending.map((o) => _NearbyOrderCard(
+                      order: o,
+                      onAccept: () => _acceptOrder(o['id']),
+                      onDecline: () => setState(() => _pending.remove(o)),
+                    )),
+              ] else
+                const _OnlineIdle(),
+            ] else
+              const _OfflineCard(),
+          ]),
+        )),
       ]),
     ),
   );
 }
 
-import '../rider/earnings_screen.dart';
-import '../shared/profile_screen.dart';
+class _OnlineIdle extends StatelessWidget {
+  const _OnlineIdle();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 60),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      SizedBox(
+        width: 72,
+        height: 72,
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: AppColors.primaryBg, shape: BoxShape.circle),
+          child: Icon(Icons.search_rounded, color: AppColors.primary, size: 36),
+        ),
+      ),
+      SizedBox(height: 14),
+      Text('Looking for nearby orders...', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: AppColors.textPrimary)),
+      SizedBox(height: 6),
+      Text('Stay online to receive new pickup requests', style: TextStyle(fontSize: 13, color: AppColors.textSecondary), textAlign: TextAlign.center),
+    ]),
+  );
+}
+
+class _OfflineCard extends StatelessWidget {
+  const _OfflineCard();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 60),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      SizedBox(
+        width: 72,
+        height: 72,
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: Color(0xFFF2F2F2), shape: BoxShape.circle),
+          child: Icon(Icons.power_settings_new_rounded, color: Color(0xFF9E9E9E), size: 36),
+        ),
+      ),
+      SizedBox(height: 14),
+      Text("You're offline", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.textPrimary)),
+      SizedBox(height: 6),
+      Text('Toggle the switch to go online and start accepting orders', style: TextStyle(fontSize: 13, color: AppColors.textSecondary), textAlign: TextAlign.center),
+    ]),
+  );
+}
+
+class _NearbyOrderCard extends StatelessWidget {
+  final Map order;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+  const _NearbyOrderCard({required this.order, required this.onAccept, required this.onDecline});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: AppColors.primaryBg, borderRadius: BorderRadius.circular(20)),
+          child: Text(
+            order['distance_km'] != null ? '${order['distance_km']} km away' : 'Open request',
+            style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: Color(0xFFF4F4F4), borderRadius: BorderRadius.circular(20)),
+          child: Text((order['waste_type'] ?? '').toUpperCase(), style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+        ),
+      ]),
+      const SizedBox(height: 10),
+      Row(children: [
+        const Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 16),
+        const SizedBox(width: 4),
+        Expanded(child: Text(order['pickup_address'] ?? '', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13), maxLines: 2, overflow: TextOverflow.ellipsis)),
+      ]),
+      const SizedBox(height: 14),
+      Row(children: [
+        Expanded(child: OutlinedButton(
+          onPressed: onDecline,
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: AppColors.divider),
+            foregroundColor: AppColors.textSecondary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(0, 44),
+          ),
+          child: const Text('Decline'),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: ElevatedButton(
+          onPressed: onAccept,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            minimumSize: const Size(0, 44),
+          ),
+          child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.w700)),
+        )),
+      ]),
+    ]),
+  );
+}

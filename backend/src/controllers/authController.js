@@ -49,14 +49,15 @@ exports.registerCustomer = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: 'All fields required' });
 
   // FIX: lowercase email before duplicate check to avoid case-sensitivity bypass
+  // FIX: scope duplicate check to the same role so a customer and rider can share contact info
   const normalEmail = email.toLowerCase().trim();
 
   const exists = await db.query(
-    'SELECT id FROM users WHERE LOWER(email)=$1 OR phone=$2',
-    [normalEmail, phone]
+    'SELECT id FROM users WHERE role=$3 AND (LOWER(email)=$1 OR phone=$2)',
+    [normalEmail, phone, 'customer']
   );
   if (exists.rows.length)
-    return res.status(409).json({ success: false, error: 'Email or phone already registered' });
+    return res.status(409).json({ success: false, error: 'Email or phone already registered for a customer account' });
 
   const hash = await bcrypt.hash(password, 12);
   const { rows } = await db.query(
@@ -85,12 +86,13 @@ exports.registerRider = asyncHandler(async (req, res) => {
   const normalEmail = email.toLowerCase().trim();
 
   // FIX: lowercase email in duplicate check
+  // FIX: scope duplicate check to the same role so a customer and rider can share contact info
   const exists = await db.query(
-    'SELECT id FROM users WHERE LOWER(email)=$1 OR phone=$2',
-    [normalEmail, phone]
+    'SELECT id FROM users WHERE role=$3 AND (LOWER(email)=$1 OR phone=$2)',
+    [normalEmail, phone, 'rider']
   );
   if (exists.rows.length)
-    return res.status(409).json({ success: false, error: 'Email or phone already registered' });
+    return res.status(409).json({ success: false, error: 'Email or phone already registered for a rider account' });
 
   const client = await db.getClient();
   try {
@@ -128,13 +130,19 @@ exports.registerRider = asyncHandler(async (req, res) => {
 
 // ── login ─────────────────────────────────────────────────────
 exports.login = asyncHandler(async (req, res) => {
-  const { email, phone, password, fcm_token } = req.body;
+  const { email, phone, password, fcm_token, role } = req.body;
   if ((!email && !phone) || !password)
     return res.status(400).json({ success: false, error: 'Credentials required' });
 
+  // FIX: when role is supplied, match only users with that role so customers and
+  // riders can share an email/phone.
+  const roleFilter = role ? 'AND role=$3' : '';
+  const params = [email?.toLowerCase().trim() || '', phone || ''];
+  if (role) params.push(role);
+
   const { rows } = await db.query(
-    'SELECT * FROM users WHERE LOWER(email)=$1 OR phone=$2',
-    [email?.toLowerCase().trim() || '', phone || '']
+    `SELECT * FROM users WHERE (LOWER(email)=$1 OR phone=$2) ${roleFilter}`,
+    params
   );
   if (!rows.length)
     return res.status(401).json({ success: false, error: 'Invalid credentials' });

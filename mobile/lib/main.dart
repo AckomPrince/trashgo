@@ -13,14 +13,16 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
-
-  // Request notification permissions
-  await FirebaseMessaging.instance.requestPermission(
-    alert: true, badge: true, sound: true,
-  );
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true, badge: true, sound: true,
+    );
+  } catch (e) {
+    // Firebase not configured yet — app runs without push notifications
+    debugPrint('Firebase init skipped: $e');
+  }
 
   runApp(const ProviderScope(child: TrashGoApp()));
 }

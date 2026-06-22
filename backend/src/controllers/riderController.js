@@ -84,24 +84,42 @@ exports.uploadDocument = asyncHandler(async (req, res) => {
 // ── Get nearby orders (for rider to see what's available) ─────
 exports.getNearbyOrders = asyncHandler(async (req, res) => {
   const { lat, lng, radius = 10 } = req.query;
-  if (!lat || !lng) return res.status(400).json({ success: false, error: 'lat and lng required' });
 
-  const { rows } = await db.query(
-    `SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at,
-            ROUND(
-              6371 * acos(
-                cos(radians($1)) * cos(radians(o.pickup_lat)) *
-                cos(radians(o.pickup_lng) - radians($2)) +
-                sin(radians($1)) * sin(radians(o.pickup_lat))
-              )::numeric, 2
-            ) AS distance_km
-     FROM orders o
-     WHERE o.status='requested' AND o.rider_id IS NULL
-     HAVING ROUND(6371*acos(cos(radians($1))*cos(radians(o.pickup_lat))*cos(radians(o.pickup_lng)-radians($2))+sin(radians($1))*sin(radians(o.pickup_lat)))::numeric,2) <= $3
-     ORDER BY distance_km
-     LIMIT 20`,
-    [parseFloat(lat), parseFloat(lng), parseFloat(radius)]
-  );
+  let rows;
+  if (lat == null || lng == null) {
+    // FIX/MVP: return all unassigned requested orders without distance filtering.
+    // GPS-based matching will be added in a future update.
+    const result = await db.query(
+      `SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at
+       FROM orders o
+       WHERE o.status='requested' AND o.rider_id IS NULL
+       ORDER BY o.requested_at DESC
+       LIMIT 20`
+    );
+    rows = result.rows;
+  } else {
+    // FIX: use a subquery so the calculated distance can be filtered in the outer WHERE
+    // without requiring a GROUP BY clause.
+    const result = await db.query(
+      `SELECT * FROM (
+         SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at,
+                ROUND(
+                  6371 * acos(
+                    cos(radians($1)) * cos(radians(o.pickup_lat)) *
+                    cos(radians(o.pickup_lng) - radians($2)) +
+                    sin(radians($1)) * sin(radians(o.pickup_lat))
+                  )::numeric, 2
+                ) AS distance_km
+         FROM orders o
+         WHERE o.status='requested' AND o.rider_id IS NULL
+       ) sub
+       WHERE distance_km <= $3
+       ORDER BY distance_km
+       LIMIT 20`,
+      [parseFloat(lat), parseFloat(lng), parseFloat(radius)]
+    );
+    rows = result.rows;
+  }
 
   res.json({ success: true, orders: rows });
 });
