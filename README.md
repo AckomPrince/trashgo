@@ -1,10 +1,10 @@
 # TrashGo
 
-**On-demand waste pickup platform for Ghana.** Customers request waste collection, nearby riders get matched in real time, and payments process through Paystack — including MTN Mobile Money.
+**On-demand waste pickup platform for Ghana. Full-stack monorepo: Node.js backend, Flutter mobile app, React admin dashboard.**
 
-TrashGo is a full-stack monorepo: a Flutter mobile app for customers and riders, a Node.js + Express API backend, and a React admin dashboard for operators. It targets the Ghanaian market with GHS currency, Paystack payments, and local mobile money integration.
+TrashGo connects households and businesses with nearby waste collectors (riders) in real time. Customers request pickups, riders compete for jobs, payments happen via Paystack (card + MTN Mobile Money), and an admin dashboard provides full operational visibility.
 
-The platform handles the complete pickup lifecycle: a customer requests pickup with their address and waste type, the backend broadcasts to nearby riders via a bounding-box + Haversine matching algorithm, the first rider to accept gets the order, live GPS tracking follows via Socket.IO, the rider confirms waste size on arrival, the backend calculates pricing, the customer approves and pays, and the rider earns with a 20% platform commission. A rewards wallet keeps customers coming back with points that expire after 12 months of inactivity.
+The platform handles the entire lifecycle: customer registration, rider onboarding, real-time order matching via Socket.IO, live GPS tracking from pickup to disposal, dynamic pricing based on waste volume, in-app payments, and a loyalty rewards system. Built for the Ghanaian market with GHS currency, MTN MoMo support, and offline-capable mobile architecture.
 
 ## Tech Stack
 
@@ -40,42 +40,46 @@ trashgo/
 
 ```bash
 cd backend
-npm install
 cp .env.example .env        # fill in credentials
+npm install
 psql $DATABASE_URL -f src/migrations/001_schema.sql
-npm run dev                 # nodemon on port 5000
+npm run dev                 # starts on port 5000
 ```
-
-Key environment variables: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `PAYSTACK_SECRET_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`, `CLOUDINARY_*`, `PLATFORM_COMMISSION` (default: 0.20), `ALLOWED_ORIGINS`.
 
 ### Mobile
 
 ```bash
 cd mobile
 flutter pub get
-
-# Configure Firebase:
-#   Android → android/app/google-services.json
-#   iOS     → ios/Runner/GoogleService-Info.plist
-
 flutter run \
   --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
   --dart-define=GOOGLE_MAPS_API_KEY=YOUR_KEY
 ```
 
-### Admin
+### Admin Dashboard
 
 ```bash
 cd admin
 npm install
-npm start    # Create React App on port 3000
+npm start                   # starts on port 3000
 ```
 
-## App Roles
+## Key Features
 
-- **Customer** — registers, requests pickup, tracks rider live, approves price, pays via Paystack, rates rider, earns rewards points
-- **Rider** — sets availability, receives nearby orders, accepts, navigates to pickup, confirms waste size, completes pickup, tracks earnings
-- **Admin** — monitors platform health, reviews riders, resolves disputes, manages pricing, views analytics
+- **Real-time order matching** — broadcasts pickup requests to nearby riders via Socket.IO with Haversine distance filtering
+- **Live GPS tracking** — customers see their rider's location from acceptance to disposal
+- **In-app payments** — Paystack integration with card and MTN Mobile Money support
+- **Dynamic pricing** — waste volume estimation at pickup, customer approval before payment
+- **Rewards system** — loyalty points for frequent customers with expiry-based retention
+- **Admin analytics** — revenue dashboard, rider performance, dispute resolution, pricing management
+- **JWT auth with token rotation** — 60-second user cache, SHA-256 hashed refresh tokens
+
+## Architecture Highlights
+
+- **Order state machine**: enforces valid transitions (`pending → accepted → rider_en_route → arrived → priced → paid → disposed → completed`)
+- **Rider matching**: SQL bounding-box pre-filter + exact Haversine on candidate set (avoids OOM with thousands of riders)
+- **Idempotent payments**: Paystack webhooks verified via HMAC-SHA512, all DB writes before returning 200
+- **Secure sessions**: refresh tokens stored as SHA-256 hashes, rotated on every use, revocable by deletion
 
 ## License
 
