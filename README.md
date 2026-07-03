@@ -1,38 +1,23 @@
 # TrashGo
 
-**On-demand waste pickup platform for Ghana. Full-stack monorepo: Node.js backend, Flutter mobile app, React admin dashboard.**
+**On-demand waste pickup platform for Ghana — connecting households and businesses with nearby riders for cashless, trackable waste disposal.**
 
-TrashGo connects households and businesses with nearby waste collectors (riders) in real time. Customers request pickups, riders compete for jobs, payments happen via Paystack (card + MTN Mobile Money), and an admin dashboard provides full operational visibility.
+TrashGo is a full-stack monorepo solving the urban waste management gap in Accra and beyond. Customers request pickups through a Flutter mobile app, riders receive real-time job notifications via Socket.IO and FCM, and an admin dashboard provides oversight with live analytics, rider management, dispute resolution, and dynamic pricing. Payments flow through Paystack (including MTN MoMo), and a points-based rewards system incentivizes consistent recycling.
 
-The platform handles the entire lifecycle: customer registration, rider onboarding, real-time order matching via Socket.IO, live GPS tracking from pickup to disposal, dynamic pricing based on waste volume, in-app payments, and a loyalty rewards system. Built for the Ghanaian market with GHS currency, MTN MoMo support, and offline-capable mobile architecture.
+Built for the Ghanaian market — designed for GHS currency, local mobile money payments, and reliable operation on modest infrastructure.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Mobile | Flutter 3.x + Dart |
-| Mobile State | Riverpod (`flutter_riverpod`) |
-| Mobile Navigation | Go Router (`go_router`) |
-| Mobile Networking | Dio + Retrofit |
-| Backend | Node.js 18 + Express 4 |
-| Database | PostgreSQL 14 |
-| Real-time | Socket.IO (server + client) |
-| Push Notifications | Firebase Cloud Messaging (FCM) |
+| Mobile | Flutter 3.x + Dart, Riverpod, Go Router, Dio |
+| Backend | Node.js 18 + Express 4, PostgreSQL 14, Socket.IO |
+| Admin UI | React 18 (Create React App) + Recharts |
 | Payments | Paystack (mobile_money + card) |
 | Maps | Google Maps Flutter SDK |
-| Location | Geolocator + Geocoding |
-| Admin UI | React 18 (Create React App) + Recharts |
-| File Storage | Cloudinary |
-| Logging | Winston (backend) |
-
-## Project Structure
-
-```
-trashgo/
-├── backend/          Node.js + Express API (port 5000)
-├── mobile/           Flutter app (iOS + Android)
-└── admin/            React admin dashboard (port 3000)
-```
+| Push | Firebase Cloud Messaging |
+| Storage | Cloudinary |
+| Auth | JWT (short-lived access + rotated refresh tokens) |
 
 ## Quick Start
 
@@ -40,10 +25,11 @@ trashgo/
 
 ```bash
 cd backend
-cp .env.example .env        # fill in credentials
 npm install
+cp .env.example .env
+# Fill in credentials (DATABASE_URL, JWT_SECRET, PAYSTACK_SECRET_KEY, etc.)
 psql $DATABASE_URL -f src/migrations/001_schema.sql
-npm run dev                 # starts on port 5000
+npm run dev
 ```
 
 ### Mobile
@@ -51,8 +37,8 @@ npm run dev                 # starts on port 5000
 ```bash
 cd mobile
 flutter pub get
-flutter run \
-  --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
+# Configure Firebase (google-services.json / GoogleService-Info.plist)
+flutter run --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
   --dart-define=GOOGLE_MAPS_API_KEY=YOUR_KEY
 ```
 
@@ -61,25 +47,21 @@ flutter run \
 ```bash
 cd admin
 npm install
-npm start                   # starts on port 3000
+cp .env.example .env
+npm start
 ```
 
-## Key Features
+## Architecture
 
-- **Real-time order matching** — broadcasts pickup requests to nearby riders via Socket.IO with Haversine distance filtering
-- **Live GPS tracking** — customers see their rider's location from acceptance to disposal
-- **In-app payments** — Paystack integration with card and MTN Mobile Money support
-- **Dynamic pricing** — waste volume estimation at pickup, customer approval before payment
-- **Rewards system** — loyalty points for frequent customers with expiry-based retention
-- **Admin analytics** — revenue dashboard, rider performance, dispute resolution, pricing management
-- **JWT auth with token rotation** — 60-second user cache, SHA-256 hashed refresh tokens
+- **Mobile** — Flutter app with Riverpod state management, Go Router navigation, Socket.IO for real-time tracking, and Google Maps for pickup/delivery visualization.
+- **Backend** — Express REST API with JWT auth, Socket.IO for rider-customer matching and location streaming, Paystack webhook integration with HMAC-SHA512 verification, and PostgreSQL with parameterized queries.
+- **Admin** — React dashboard with Recharts analytics, rider approval workflow, order management with status filters, dispute resolution, and dynamic pricing grid.
 
-## Architecture Highlights
+## Roles & Flows
 
-- **Order state machine**: enforces valid transitions (`pending → accepted → rider_en_route → arrived → priced → paid → disposed → completed`)
-- **Rider matching**: SQL bounding-box pre-filter + exact Haversine on candidate set (avoids OOM with thousands of riders)
-- **Idempotent payments**: Paystack webhooks verified via HMAC-SHA512, all DB writes before returning 200
-- **Secure sessions**: refresh tokens stored as SHA-256 hashes, rotated on every use, revocable by deletion
+- **Customer** — Register, request pickup, track rider in real-time, approve pricing, pay via Paystack/MoMo, earn rewards points.
+- **Rider** — Go online, receive job notifications, accept pickups, navigate to locations, complete jobs, track earnings.
+- **Admin** — Approve/reject riders, monitor live stats, manage orders and disputes, configure pricing.
 
 ## License
 
