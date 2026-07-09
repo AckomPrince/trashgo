@@ -207,28 +207,61 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
 });
 
 // ── Rider: complete order ──────────────────────────────────────
+// S1 (#2): rider earnings + wallet credit happen in ONE transaction. The
+// wallet is credited only when a NEW rider_earnings row is inserted (idempotent
+// on order_id) so a retry can never double-credit. Customer points are awarded
+// after commit (awardPoints runs its own transaction).
 exports.completeOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const { rows } = await db.query(
-    `SELECT * FROM orders WHERE id=$1 AND rider_id=$2 AND status='in_progress'`,
-    [id, req.user.id]
-  );
-  if (!rows.length)
-    return res.status(404).json({ success: false, error: 'Order not found or not in progress' });
+  const client = await db.getClient();
+  let order;
+  let net = 0;
+  try {
+    await client.query('BEGIN');
 
-  const order = rows[0];
-  await db.query(`UPDATE orders SET status='completed', completed_at=NOW() WHERE id=$1`, [id]);
+    const { rows } = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND rider_id=$2 AND status='in_progress' FOR UPDATE`,
+      [id, req.user.id]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Order not found or not in progress' });
+    }
+    order = rows[0];
 
-  const gross      = parseFloat(order.final_price || 0);
-  const commission = Math.round(gross * parseFloat(process.env.PLATFORM_COMMISSION || '0.20') * 100) / 100;
-  const net        = Math.round((gross - commission) * 100) / 100;
+    await client.query(`UPDATE orders SET status='completed', completed_at=NOW() WHERE id=$1`, [id]);
 
-  await db.query(
-    `INSERT INTO rider_earnings (rider_id, order_id, gross, commission, net)
-     VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING`,
-    [req.user.id, id, gross, commission, net]
-  );
+    const gross      = parseFloat(order.final_price || 0);
+    const commission = Math.round(gross * parseFloat(process.env.PLATFORM_COMMISSION || '0.20') * 100) / 100;
+    net              = Math.round((gross - commission) * 100) / 100;
+
+    const earning = await client.query(
+      `INSERT INTO rider_earnings (rider_id, order_id, gross, commission, net)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING RETURNING id`,
+      [req.user.id, id, gross, commission, net]
+    );
+
+    // Credit the rider wallet only on the first (non-conflicting) earnings insert.
+    if (earning.rows.length) {
+      await client.query(
+        `INSERT INTO rider_wallets (user_id, balance, total_earned)
+         VALUES ($1,$2,$2)
+         ON CONFLICT (user_id) DO UPDATE
+           SET balance      = rider_wallets.balance + $2,
+               total_earned = rider_wallets.total_earned + $2,
+               updated_at   = NOW()`,
+        [req.user.id, net]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   const points = calculatePoints({ wasteType: order.waste_type, wasteSize: order.waste_size });
   await awardPoints(order.customer_id, id, points);

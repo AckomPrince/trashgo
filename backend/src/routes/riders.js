@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 
 router.patch('/availability', auth(['rider']), ctrl.setAvailability);
 router.patch('/location',     auth(['rider']), ctrl.updateLocation);
+router.get('/wallet',         auth(['rider']), ctrl.getWallet);
 router.get('/earnings',       auth(['rider']), ctrl.getEarnings);
 router.get('/profile',        auth(['rider']), ctrl.getProfile);
 router.patch('/documents',    auth(['rider']), ctrl.uploadDocument);

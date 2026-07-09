@@ -22,6 +22,18 @@ exports.updateLocation = asyncHandler(async (req, res) => {
   res.json({ success: true });
 });
 
+// ── Get rider wallet (S1 #2) ───────────────────────────────────
+exports.getWallet = asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT user_id, balance, total_earned, total_withdrawn, currency, updated_at FROM rider_wallets WHERE user_id=$1',
+    [req.user.id]
+  );
+  const wallet = rows[0] || {
+    user_id: req.user.id, balance: 0, total_earned: 0, total_withdrawn: 0, currency: 'GHS',
+  };
+  res.json({ success: true, wallet });
+});
+
 // ── Get rider earnings ─────────────────────────────────────────
 exports.getEarnings = asyncHandler(async (req, res) => {
   const riderId = req.user.id;

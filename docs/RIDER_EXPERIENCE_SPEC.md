@@ -61,8 +61,8 @@ before withdrawal even exists).
 | Epic | Title | Issue | State | Notes |
 |------|-------|-------|-------|-------|
 | — | Rider Experience → Payments (tracking) | #9 | IN PROGRESS | Epic |
-| S1 | Rider Wallet & Earnings Ledger | #2 | IN PROGRESS | Architectural anchor for payments |
-| S2 | Rider Ratings & Reliability | #3 | TODO | |
+| S1 | Rider Wallet & Earnings Ledger | #2 | DONE | Ledger + accrual + GET /riders/wallet. 47/47 smoke |
+| S2 | Rider Ratings & Reliability | #3 | IN PROGRESS | |
 | S3 | Smart Dispatch & Job Feed | #4 | TODO | Depends on S1, S2 |
 | S4 | Rider Onboarding & Verification | #5 | TODO | Ghana Card + vehicle photos |
 | S5 | Job Execution Polish | #6 | TODO | Proof photo, contact, nav |
@@ -93,14 +93,14 @@ Stories
   that a crash never loses or double-counts earnings.
 
 Acceptance criteria
-- [ ] New table `rider_wallets(user_id PK, balance, total_earned, total_withdrawn, currency, updated_at)`.
-- [ ] `orderController.completeOrder` credits the rider wallet **inside the same
+- [x] New table `rider_wallets(user_id PK, balance, total_earned, total_withdrawn, currency, updated_at)`.
+- [x] `orderController.completeOrder` credits the rider wallet **inside the same
       transaction** as the `rider_earnings` insert (idempotent on `order_id`).
-- [ ] `GET /api/v1/riders/wallet` → `{ success, wallet }`.
-- [ ] `GET /api/v1/riders/earnings?period=today|week|month|all` returns summary
+- [x] `GET /api/v1/riders/wallet` → `{ success, wallet }`.
+- [x] `GET /api/v1/riders/earnings?period=today|week|month|all` returns summary
       (jobs, gross, net, commission) + recent earnings (existing, verified).
-- [ ] Unit tests: accrual math, idempotency, transaction rollback.
-- [ ] Smoke checks: complete an order → wallet balance == net; second complete
+- [x] Unit tests: accrual math, idempotency, transaction rollback.
+- [x] Smoke checks: complete an order → wallet balance == net; second complete
       is a no-op.
 
 Technical notes

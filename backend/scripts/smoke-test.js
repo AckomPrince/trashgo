@@ -174,6 +174,16 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('GET', '/riders/earnings', { token: riderToken });
     ok('rider earnings summary', r.status === 200 && Number(r.body?.summary?.total_net) === 8, `-> ${r.status} ${JSON.stringify(r.body?.summary)}`);
 
+    console.log('\n── S1: Rider wallet accrual ──');
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('rider wallet balance = 8 (net accrued)', r.status === 200 && Number(r.body?.wallet?.balance) === 8, `-> ${r.status} ${JSON.stringify(r.body?.wallet)}`);
+    ok('rider wallet total_earned = 8', Number(r.body?.wallet?.total_earned) === 8, `-> ${r.body?.wallet?.total_earned}`);
+
+    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken });
+    ok('second complete -> 404 (already completed)', r.status === 404, `-> ${r.status}`);
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('wallet unchanged after double-complete = 8', Number(r.body?.wallet?.balance) === 8, `-> ${r.body?.wallet?.balance}`);
+
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });
     ok('refresh rotates token 200', r.status === 200 && r.body?.token && r.body?.refresh_token !== custRefresh, `-> ${r.status}`);
