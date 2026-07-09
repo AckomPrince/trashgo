@@ -3,11 +3,12 @@ const router  = express.Router();
 const ctrl    = require('../controllers/paymentController');
 const { auth } = require('../middleware/auth');
 
-// Raw body needed for Paystack webhook signature check
-router.post('/webhook', express.raw({ type: 'application/json' }),
-  (req, res, next) => { req.body = JSON.parse(req.body); next(); },
-  ctrl.paystackWebhook
-);
+// Raw body needed for Paystack webhook signature check.
+// FIX: keep req.body as the raw Buffer and let the controller verify the
+// signature against the exact bytes before parsing. The previous inline
+// JSON.parse ran against an already-parsed object (global json parser),
+// producing JSON.parse("[object Object]") and a 500 on every webhook.
+router.post('/webhook', express.raw({ type: 'application/json' }), ctrl.paystackWebhook);
 router.post('/initialize',    auth(['customer']), ctrl.initializePayment);
 router.get('/verify/:reference', auth(),          ctrl.verifyPayment);
 

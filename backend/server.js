@@ -37,7 +37,14 @@ app.use(cors({
 }));
 app.use(helmet());
 app.use(morgan('combined', { stream: { write: msg => logger.info(msg.trim()) } }));
-app.use(express.json({ limit: '10mb' }));
+// FIX: the Paystack webhook needs its raw body for HMAC signature verification.
+// The global JSON parser must NOT consume it first — otherwise express.raw() in
+// the payments router is skipped (body-parser sees req._body already set) and the
+// webhook 500s. Skip JSON parsing only for that one path.
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/v1/payments/webhook') return next();
+  return express.json({ limit: '10mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting

@@ -2,7 +2,14 @@
 -- Run this on a fresh PostgreSQL database
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis"; -- optional, for geo queries
+-- postgis is optional (geo queries use plain lat/lng DECIMAL columns, not geometry).
+-- Skip gracefully when it isn't installed so a fresh dev machine can still migrate.
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS "postgis";
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'postgis extension not available — skipping (matching uses lat/lng columns)';
+END$$;
 
 -- ─────────────────────────────────────────
 -- USERS
