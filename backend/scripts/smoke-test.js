@@ -171,6 +171,18 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('POST', `/orders/${orderId}/rate`, { token: custToken, body: { rating: 5, review: 'great' } });
     ok('rate completed order 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
 
+    console.log('\n── S2: Rider ratings & reliability ──');
+    r = await req('POST', `/orders/${orderId}/rate-rider`, { token: custToken, body: { rating: 4, review: 'polite and quick' } });
+    ok('customer rates rider 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
+    r = await req('POST', `/orders/${orderId}/rate-rider`, { token: custToken, body: { rating: 5 } });
+    ok('re-rate rider blocked -> 404', r.status === 404, `-> ${r.status}`);
+    r = await req('GET', '/riders/profile', { token: riderToken });
+    ok('rider rating_avg = 4', r.status === 200 && Number(r.body?.profile?.rating_avg) === 4, `-> ${r.status} ${JSON.stringify(r.body?.profile?.rating_avg)}`);
+    ok('rider rating_count = 1', Number(r.body?.profile?.rating_count) === 1, `-> ${r.body?.profile?.rating_count}`);
+    ok('rider accepted_count >= 1', Number(r.body?.profile?.accepted_count) >= 1, `-> ${r.body?.profile?.accepted_count}`);
+    ok('rider completed_count >= 1', Number(r.body?.profile?.completed_count) >= 1, `-> ${r.body?.profile?.completed_count}`);
+    ok('rider reliability = 1', Number(r.body?.profile?.reliability) === 1, `-> ${r.body?.profile?.reliability}`);
+
     r = await req('GET', '/riders/earnings', { token: riderToken });
     ok('rider earnings summary', r.status === 200 && Number(r.body?.summary?.total_net) === 8, `-> ${r.status} ${JSON.stringify(r.body?.summary)}`);
 

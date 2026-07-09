@@ -76,7 +76,12 @@ exports.getProfile = asyncHandler(async (req, res) => {
     [req.user.id]
   );
   if (!rows.length) return res.status(404).json({ success: false, error: 'Profile not found' });
-  res.json({ success: true, profile: rows[0] });
+  const profile = rows[0];
+  // S2 (#3): reliability = completed / accepted (null until the rider has accepted a job)
+  profile.reliability = profile.accepted_count > 0
+    ? Math.round((profile.completed_count / profile.accepted_count) * 100) / 100
+    : null;
+  res.json({ success: true, profile });
 });
 
 // ── Upload ID / license docs (base64 or URL) ──────────────────

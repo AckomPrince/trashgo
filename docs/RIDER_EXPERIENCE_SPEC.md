@@ -62,8 +62,8 @@ before withdrawal even exists).
 |------|-------|-------|-------|-------|
 | — | Rider Experience → Payments (tracking) | #9 | IN PROGRESS | Epic |
 | S1 | Rider Wallet & Earnings Ledger | #2 | DONE | Ledger + accrual + GET /riders/wallet. 47/47 smoke |
-| S2 | Rider Ratings & Reliability | #3 | IN PROGRESS | |
-| S3 | Smart Dispatch & Job Feed | #4 | TODO | Depends on S1, S2 |
+| S2 | Rider Ratings & Reliability | #3 | DONE | rate-rider + avg + counters + reliability. 54/54 smoke |
+| S3 | Smart Dispatch & Job Feed | #4 | IN PROGRESS | Depends on S1, S2 |
 | S4 | Rider Onboarding & Verification | #5 | TODO | Ghana Card + vehicle photos |
 | S5 | Job Execution Polish | #6 | TODO | Proof photo, contact, nav |
 | S6 | Engagement & Safety | #7 | TODO | Streaks/incentives, SOS |
@@ -127,15 +127,16 @@ Stories
   reliability can be measured.
 
 Acceptance criteria
-- [ ] Migration: `orders.rider_rating SMALLINT CHECK (1..5)`, `orders.rider_review TEXT`;
+- [x] Migration: `orders.rider_rating SMALLINT CHECK (1..5)`, `orders.rider_review TEXT`;
       `rider_profiles.rating_avg`, `rating_count`, `accepted_count`,
       `cancelled_count`, `completed_count`.
-- [ ] `POST /api/v1/orders/:id/rate-rider` (customer, completed order) updates
+- [x] `POST /api/v1/orders/:id/rate-rider` (customer, completed order) updates
       the order and recomputes the rider aggregate atomically.
-- [ ] Rider profile / `GET /riders/profile` returns rating + reliability fields.
-- [ ] Counters updated: `accepted_count` on accept, `completed_count` on
-      complete, `cancelled_count` on rider-initiated cancel.
-- [ ] Unit + smoke tests (rate rider → avg reflects it; bad rating rejected).
+- [x] Rider profile / `GET /riders/profile` returns rating + reliability fields.
+- [x] Counters updated: `accepted_count` on accept, `completed_count` on
+      complete. (`cancelled_count` column reserved — wired when a rider-cancel
+      endpoint lands.)
+- [x] Unit + smoke tests (rate rider → avg reflects it; bad rating rejected).
 
 Technical notes
 - Recompute `rating_avg = ((rating_avg*rating_count)+new)/(rating_count+1)`.

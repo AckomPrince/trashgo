@@ -12,5 +12,6 @@ router.patch('/:id/start',         auth(['rider']),             ctrl.startPickup
 router.patch('/:id/complete',      auth(['rider']),             ctrl.completeOrder);
 router.patch('/:id/cancel',        auth(['customer']),         ctrl.cancelOrder);
 router.post('/:id/rate',           auth(['customer']),         ctrl.rateOrder);
+router.post('/:id/rate-rider',     auth(['customer']),         ctrl.rateRider);
 
 module.exports = router;

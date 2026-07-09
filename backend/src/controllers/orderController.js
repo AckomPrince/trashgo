@@ -59,6 +59,11 @@ exports.acceptOrder = asyncHandler(async (req, res) => {
       `UPDATE orders SET rider_id=$1, status='accepted', accepted_at=NOW() WHERE id=$2`,
       [riderId, id]
     );
+    // S2 (#3): track accepted jobs for the rider reliability score.
+    await client.query(
+      `UPDATE rider_profiles SET accepted_count = accepted_count + 1 WHERE user_id=$1`,
+      [riderId]
+    );
     await client.query('COMMIT');
 
     await notify(order.customer_id, {
@@ -253,6 +258,11 @@ exports.completeOrder = asyncHandler(async (req, res) => {
                updated_at   = NOW()`,
         [req.user.id, net]
       );
+      // S2 (#3): track completed jobs for the rider reliability score.
+      await client.query(
+        `UPDATE rider_profiles SET completed_count = completed_count + 1 WHERE user_id=$1`,
+        [req.user.id]
+      );
     }
 
     await client.query('COMMIT');
@@ -357,6 +367,51 @@ exports.rateOrder = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, error: 'Order not found or not completed' });
 
   res.json({ success: true, message: 'Rating submitted' });
+});
+
+// ── Customer: rate the rider (S2 #3) ───────────────────────────
+// Recomputes the rider's running average atomically. Idempotent: the
+// `rider_rating IS NULL` guard prevents re-rating the same order.
+exports.rateRider = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { rating, review } = req.body;
+
+  if (!rating || rating < 1 || rating > 5)
+    return res.status(400).json({ success: false, error: 'Rating must be 1-5' });
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE orders SET rider_rating=$1, rider_review=$2
+       WHERE id=$3 AND customer_id=$4 AND status='completed'
+         AND rider_id IS NOT NULL AND rider_rating IS NULL
+       RETURNING rider_id`,
+      [rating, review || null, id, req.user.id]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Order not found, not completed, or already rated' });
+    }
+
+    await client.query(
+      `UPDATE rider_profiles
+       SET rating_avg   = ROUND(((rating_avg * rating_count) + $1) / (rating_count + 1), 2),
+           rating_count = rating_count + 1
+       WHERE user_id=$2`,
+      [rating, rows[0].rider_id]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  res.json({ success: true, message: 'Rider rated' });
 });
 
 // ── Rider: start in-progress ───────────────────────────────────
