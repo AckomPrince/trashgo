@@ -101,16 +101,29 @@ exports.initializePayment = asyncHandler(async (req, res) => {
 // FIX 2: Idempotency guard — if we already marked the order 'paid' we skip
 //         processing and still return 200 (safe to retry).
 exports.paystackWebhook = asyncHandler(async (req, res) => {
+  // req.body is the raw Buffer (express.raw) so we verify the HMAC against the
+  // EXACT bytes Paystack signed. Re-serializing a parsed object can reorder
+  // keys / change whitespace and break otherwise-valid signatures.
+  const raw = Buffer.isBuffer(req.body)
+    ? req.body.toString('utf8')
+    : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
+
   // Verify HMAC-SHA512 signature
   const hash = crypto
     .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
-    .update(JSON.stringify(req.body))
+    .update(raw)
     .digest('hex');
 
   if (hash !== req.headers['x-paystack-signature'])
     return res.status(400).json({ error: 'Invalid signature' });
 
-  const { event, data } = req.body;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return res.status(400).json({ error: 'Invalid JSON payload' });
+  }
+  const { event, data } = parsed;
 
   if (event === 'charge.success') {
     // FIX: idempotency — fetch current state before doing anything

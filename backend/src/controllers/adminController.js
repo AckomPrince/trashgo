@@ -93,9 +93,13 @@ exports.reviewRider = asyncHandler(async (req, res) => {
   if (!valid.includes(action))
     return res.status(400).json({ success: false, error: 'Invalid action' });
 
+  // FIX: cast $1 explicitly to the enum on assignment. Without the cast $1 is
+  // deduced as rider_status in `status=$1` but as text in `$1='approved'`,
+  // which Postgres rejects ("inconsistent types deduced for parameter $1").
+  // Casting only the assignment keeps $1 a plain text parameter everywhere.
   await db.query(
     `UPDATE rider_profiles
-     SET status=$1, admin_note=$2, approved_by=$3,
+     SET status=$1::rider_status, admin_note=$2, approved_by=$3,
          approved_at=CASE WHEN $1='approved' THEN NOW() ELSE approved_at END
      WHERE user_id=$4`,
     [action, note || null, req.user.id, rider_id]
