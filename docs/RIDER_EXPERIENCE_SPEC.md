@@ -60,14 +60,14 @@ before withdrawal even exists).
 
 | Epic | Title | Issue | State | Notes |
 |------|-------|-------|-------|-------|
-| — | Rider Experience → Payments (tracking) | #9 | IN PROGRESS | Epic |
+| — | Rider Experience → Payments (tracking) | #9 | DONE | All epics shipped. 84/84 smoke, 51/51 Jest |
 | S1 | Rider Wallet & Earnings Ledger | #2 | DONE | Ledger + accrual + GET /riders/wallet. 47/47 smoke |
 | S2 | Rider Ratings & Reliability | #3 | DONE | rate-rider + avg + counters + reliability. 54/54 smoke |
 | S3 | Smart Dispatch & Job Feed | #4 | DONE | Offers + decline + estimated earnings + rating tie-break. 59/59 smoke |
 | S4 | Rider Onboarding & Verification | #5 | DONE | Ghana Card + vehicle photo + onboarding steps. 65/65 smoke |
 | S5 | Job Execution Polish | #6 | DONE | Proof photo + maps link + contact masking. 70/70 smoke |
 | S6 | Engagement & Safety | #7 | DONE | Incentives + progress + SOS. 73/73 smoke |
-| P  | Payments — Payouts to MoMo/Bank | #8 | IN PROGRESS | Depends on S1. Flexible/quick/seamless |
+| P  | Payments — Payouts to MoMo/Bank | #8 | DONE | Recipients + withdraw + transfer webhook (refund/idempotent). 84/84 smoke |
 
 Legend: TODO · IN PROGRESS · IN REVIEW · DONE · BLOCKED
 
@@ -278,19 +278,19 @@ Stories
   and be idempotent, so money is never double-sent.
 
 Acceptance criteria
-- [ ] Migration: `payout_recipients(id, rider_id, type[mobile_money|bank], provider, account_number, account_name, paystack_recipient_code, is_default, created_at)`;
-      `payouts(id, rider_id, amount, currency, status[pending|processing|paid|failed|reversed], paystack_transfer_code, reference, recipient_id, failure_reason, created_at, settled_at)`.
-- [ ] `POST /riders/payout-recipients` → create Paystack transfer recipient
+- [x] Migration: `payout_recipients(...)`, `payouts(...)`.
+- [x] `POST /riders/payout-recipients` → create Paystack transfer recipient
       (MoMo or bank), store code, optionally set default.
-- [ ] `POST /riders/payout` → validate balance ≥ amount ≥ MIN_PAYOUT, debit
+- [x] `POST /riders/payout` → validate balance ≥ amount ≥ MIN_PAYOUT, debit
       wallet + create `payouts(pending)` **atomically**, then initiate Paystack
       transfer; on API failure, roll back the debit.
-- [ ] `GET /riders/payouts` + `GET /riders/payout-recipients`.
-- [ ] `POST /payments/transfer-webhook` (raw body + HMAC verify, idempotent):
+- [x] `GET /riders/payouts` + `GET /riders/payout-recipients`.
+- [x] `POST /payments/transfer-webhook` (raw body + HMAC verify, idempotent):
       `transfer.success` → payout `paid`, `transfer.failed|reversed` → refund
       wallet + mark failed.
-- [ ] Config: `MIN_PAYOUT` (default 10 GHS), optional daily cap.
-- [ ] Unit + smoke tests (recipient create mocked; payout debit/rollback;
+- [x] Config: `MIN_PAYOUT` (default 10 GHS). `PAYMENTS_MOCK=true` simulates
+      transfers for local/dev (never enable in production).
+- [x] Unit + smoke tests (recipient create mocked; payout debit/rollback;
       webhook success refund/settle; idempotent resend).
 
 Technical notes — flexible / quick / seamless
