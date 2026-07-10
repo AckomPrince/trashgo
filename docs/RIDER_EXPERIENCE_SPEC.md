@@ -64,8 +64,8 @@ before withdrawal even exists).
 | S1 | Rider Wallet & Earnings Ledger | #2 | DONE | Ledger + accrual + GET /riders/wallet. 47/47 smoke |
 | S2 | Rider Ratings & Reliability | #3 | DONE | rate-rider + avg + counters + reliability. 54/54 smoke |
 | S3 | Smart Dispatch & Job Feed | #4 | DONE | Offers + decline + estimated earnings + rating tie-break. 59/59 smoke |
-| S4 | Rider Onboarding & Verification | #5 | IN PROGRESS | Ghana Card + vehicle photos |
-| S5 | Job Execution Polish | #6 | TODO | Proof photo, contact, nav |
+| S4 | Rider Onboarding & Verification | #5 | DONE | Ghana Card + vehicle photo + onboarding steps. 65/65 smoke |
+| S5 | Job Execution Polish | #6 | IN PROGRESS | Proof photo, contact, nav |
 | S6 | Engagement & Safety | #7 | TODO | Streaks/incentives, SOS |
 | P  | Payments — Payouts to MoMo/Bank | #8 | TODO | LAST. Depends on S1. Flexible/quick/seamless |
 
@@ -193,15 +193,14 @@ Stories
   reason, so only legitimate riders operate.
 
 Acceptance criteria
-- [ ] Migration: `rider_profiles.ghana_card_number`, `ghana_card_url`,
+- [x] Migration: `rider_profiles.ghana_card_number`, `ghana_card_url`,
       `vehicle_photo_url`, `onboarding_step`, and reuse `status` enum.
-- [ ] `POST /riders/documents` accepts `doc_type` in
+- [x] `POST /riders/documents` accepts `doc_type` in
       {id_document_url, license_url, ghana_card_url, vehicle_photo_url} + url
       (Cloudinary URL). Validates doc_type.
-- [ ] `GET /riders/onboarding` returns completed steps + next required step.
-- [ ] Admin `GET /admin/riders` already returns doc URLs; add ghana_card +
-      vehicle photo. `reviewRider` unchanged (approve/reject/suspend).
-- [ ] Unit + smoke tests.
+- [x] `GET /riders/onboarding` returns completed steps + next required step.
+- [x] Admin `GET /admin/riders` returns ghana_card + vehicle photo URLs.
+- [x] Unit + smoke tests.
 
 Technical notes
 - Cloudinary upload is client-side (mobile) → server stores the returned URL.

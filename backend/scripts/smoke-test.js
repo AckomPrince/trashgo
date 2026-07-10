@@ -218,6 +218,21 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('GET', '/riders/profile', { token: riderToken });
     ok('rider declined_count >= 1', Number(r.body?.profile?.declined_count) >= 1, `-> ${r.body?.profile?.declined_count}`);
 
+    console.log('\n── S4: Onboarding & verification ──');
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'ghana_card_url', url: 'https://cdn/ghana-card.jpg', ghana_card_number: 'GHA-000111222-3' } });
+    ok('upload ghana card 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'vehicle_photo_url', url: 'https://cdn/tricycle.jpg' } });
+    ok('upload vehicle photo 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'license_url', url: 'https://cdn/license.jpg' } });
+    ok('upload license 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'passport_url', url: 'x' } });
+    ok('invalid doc_type -> 400', r.status === 400, `-> ${r.status}`);
+    r = await req('GET', '/riders/onboarding', { token: riderToken });
+    ok('onboarding complete = true', r.status === 200 && r.body?.onboarding?.complete === true, `-> ${r.status} ${JSON.stringify(r.body?.onboarding?.next_step)}`);
+    r = await req('GET', '/admin/riders?status=approved', { token: adminToken });
+    const rprof = (r.body?.riders || []).find((x) => x.id === riderId);
+    ok('admin riders list exposes ghana_card_url', !!rprof && !!rprof.ghana_card_url, `-> ${JSON.stringify(rprof?.ghana_card_url)}`);
+
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });
     ok('refresh rotates token 200', r.status === 200 && r.body?.token && r.body?.refresh_token !== custRefresh, `-> ${r.status}`);

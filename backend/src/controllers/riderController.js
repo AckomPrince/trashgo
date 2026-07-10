@@ -84,18 +84,54 @@ exports.getProfile = asyncHandler(async (req, res) => {
   res.json({ success: true, profile });
 });
 
-// ── Upload ID / license docs (base64 or URL) ──────────────────
+// ── Upload ID / license / Ghana Card / vehicle docs (S4 #5) ───
 exports.uploadDocument = asyncHandler(async (req, res) => {
-  const { doc_type, url } = req.body;
-  const validTypes = ['id_document_url', 'license_url'];
+  const { doc_type, url, ghana_card_number } = req.body;
+  const validTypes = ['id_document_url', 'license_url', 'ghana_card_url', 'vehicle_photo_url'];
   if (!validTypes.includes(doc_type))
     return res.status(400).json({ success: false, error: 'Invalid doc_type' });
 
-  await db.query(
-    `UPDATE rider_profiles SET ${doc_type}=$1, updated_at=NOW() WHERE user_id=$2`,
-    [url, req.user.id]
-  );
+  // doc_type is allow-listed above, so interpolation here is safe.
+  if (doc_type === 'ghana_card_url' && ghana_card_number) {
+    await db.query(
+      `UPDATE rider_profiles SET ghana_card_url=$1, ghana_card_number=$2, updated_at=NOW() WHERE user_id=$3`,
+      [url, ghana_card_number, req.user.id]
+    );
+  } else {
+    await db.query(
+      `UPDATE rider_profiles SET ${doc_type}=$1, updated_at=NOW() WHERE user_id=$2`,
+      [url, req.user.id]
+    );
+  }
   res.json({ success: true, message: 'Document updated' });
+});
+
+// ── Onboarding progress (S4 #5) ────────────────────────────────
+exports.getOnboarding = asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT ghana_card_number, ghana_card_url, vehicle_photo_url, license_url, id_document_url, status
+     FROM rider_profiles WHERE user_id=$1`,
+    [req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ success: false, error: 'Profile not found' });
+
+  const p = rows[0];
+  const steps = [
+    { key: 'ghana_card',    label: 'Ghana Card',        done: !!(p.ghana_card_url && p.ghana_card_number) },
+    { key: 'vehicle_photo', label: 'Vehicle Photo',     done: !!p.vehicle_photo_url },
+    { key: 'license',       label: "Driver's License",  done: !!p.license_url },
+  ];
+  const next = steps.find((s) => !s.done);
+
+  res.json({
+    success: true,
+    onboarding: {
+      steps,
+      next_step: next ? next.key : null,
+      complete: steps.every((s) => s.done),
+      approval_status: p.status,
+    },
+  });
 });
 
 // ── Get nearby orders (for rider to see what's available) ─────
