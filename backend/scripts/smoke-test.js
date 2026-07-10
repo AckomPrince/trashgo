@@ -161,7 +161,7 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('PATCH', `/orders/${orderId}/start`, { token: riderToken });
     ok('rider start -> in_progress 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
 
-    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken });
+    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken, body: { completion_photo_url: 'https://cdn/proof.jpg' } });
     ok('rider complete 200', r.status === 200 && r.body?.points_awarded === 70, `-> ${r.status} ${JSON.stringify(r.body)}`);
     ok('rider net earning = 8 (10 - 20%)', r.body?.rider_net_earning === 8, `-> ${r.body?.rider_net_earning}`);
 
@@ -171,8 +171,115 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('POST', `/orders/${orderId}/rate`, { token: custToken, body: { rating: 5, review: 'great' } });
     ok('rate completed order 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
 
+    console.log('\n── S2: Rider ratings & reliability ──');
+    r = await req('POST', `/orders/${orderId}/rate-rider`, { token: custToken, body: { rating: 4, review: 'polite and quick' } });
+    ok('customer rates rider 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
+    r = await req('POST', `/orders/${orderId}/rate-rider`, { token: custToken, body: { rating: 5 } });
+    ok('re-rate rider blocked -> 404', r.status === 404, `-> ${r.status}`);
+    r = await req('GET', '/riders/profile', { token: riderToken });
+    ok('rider rating_avg = 4', r.status === 200 && Number(r.body?.profile?.rating_avg) === 4, `-> ${r.status} ${JSON.stringify(r.body?.profile?.rating_avg)}`);
+    ok('rider rating_count = 1', Number(r.body?.profile?.rating_count) === 1, `-> ${r.body?.profile?.rating_count}`);
+    ok('rider accepted_count >= 1', Number(r.body?.profile?.accepted_count) >= 1, `-> ${r.body?.profile?.accepted_count}`);
+    ok('rider completed_count >= 1', Number(r.body?.profile?.completed_count) >= 1, `-> ${r.body?.profile?.completed_count}`);
+    ok('rider reliability = 1', Number(r.body?.profile?.reliability) === 1, `-> ${r.body?.profile?.reliability}`);
+
     r = await req('GET', '/riders/earnings', { token: riderToken });
     ok('rider earnings summary', r.status === 200 && Number(r.body?.summary?.total_net) === 8, `-> ${r.status} ${JSON.stringify(r.body?.summary)}`);
+
+    console.log('\n── S1: Rider wallet accrual ──');
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('rider wallet balance = 8 (net accrued)', r.status === 200 && Number(r.body?.wallet?.balance) === 8, `-> ${r.status} ${JSON.stringify(r.body?.wallet)}`);
+    ok('rider wallet total_earned = 8', Number(r.body?.wallet?.total_earned) === 8, `-> ${r.body?.wallet?.total_earned}`);
+
+    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken });
+    ok('second complete -> 404 (already completed)', r.status === 404, `-> ${r.status}`);
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('wallet unchanged after double-complete = 8', Number(r.body?.wallet?.balance) === 8, `-> ${r.body?.wallet?.balance}`);
+
+    console.log('\n── S3: Smart dispatch & job feed ──');
+    await req('PATCH', '/riders/availability', { token: riderToken, body: { online: true } });
+    await req('PATCH', '/riders/location', { token: riderToken, body: { lat: 5.6037, lng: -0.1870 } });
+
+    const cust2 = { full_name: 'Cust Two', email: `cust2${ts}@test.io`, phone: `+2337${String(ts).slice(-8)}`, password: 'Passw0rd!' };
+    r = await req('POST', '/auth/register/customer', { body: cust2 });
+    const cust2Token = r.body?.token;
+    r = await req('POST', '/orders', { token: cust2Token, body: { pickup_address: 'KNUST, Kumasi', pickup_lat: 5.6037, pickup_lng: -0.1870, waste_type: 'general' } });
+    const order2 = r.body?.order?.id;
+    ok('order2 created + riders notified >= 1', r.status === 201 && r.body?.riders_notified >= 1, `-> ${r.status} notified=${r.body?.riders_notified}`);
+
+    r = await req('GET', '/riders/nearby-orders', { token: riderToken });
+    const feedOrder = (r.body?.orders || []).find((o) => o.id === order2);
+    ok('nearby feed includes order2 w/ estimated_earning=8', !!feedOrder && Number(feedOrder.estimated_earning) === 8, `-> ${JSON.stringify(feedOrder)}`);
+
+    r = await req('POST', `/orders/${order2}/decline`, { token: riderToken });
+    ok('decline offer 200', r.status === 200, `-> ${r.status}`);
+    r = await req('GET', '/riders/nearby-orders', { token: riderToken });
+    ok('declined order2 excluded from feed', !(r.body?.orders || []).find((o) => o.id === order2), `-> still present?`);
+    r = await req('GET', '/riders/profile', { token: riderToken });
+    ok('rider declined_count >= 1', Number(r.body?.profile?.declined_count) >= 1, `-> ${r.body?.profile?.declined_count}`);
+
+    console.log('\n── S4: Onboarding & verification ──');
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'ghana_card_url', url: 'https://cdn/ghana-card.jpg', ghana_card_number: 'GHA-000111222-3' } });
+    ok('upload ghana card 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'vehicle_photo_url', url: 'https://cdn/tricycle.jpg' } });
+    ok('upload vehicle photo 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'license_url', url: 'https://cdn/license.jpg' } });
+    ok('upload license 200', r.status === 200, `-> ${r.status}`);
+    r = await req('PATCH', '/riders/documents', { token: riderToken, body: { doc_type: 'passport_url', url: 'x' } });
+    ok('invalid doc_type -> 400', r.status === 400, `-> ${r.status}`);
+    r = await req('GET', '/riders/onboarding', { token: riderToken });
+    ok('onboarding complete = true', r.status === 200 && r.body?.onboarding?.complete === true, `-> ${r.status} ${JSON.stringify(r.body?.onboarding?.next_step)}`);
+    r = await req('GET', '/admin/riders?status=approved', { token: adminToken });
+    const rprof = (r.body?.riders || []).find((x) => x.id === riderId);
+    ok('admin riders list exposes ghana_card_url', !!rprof && !!rprof.ghana_card_url, `-> ${JSON.stringify(rprof?.ghana_card_url)}`);
+
+    console.log('\n── S5: Job execution polish ──');
+    r = await req('GET', `/orders/${orderId}`, { token: custToken });
+    ok('completed order returns completion_photo_url', r.status === 200 && r.body?.order?.completion_photo_url === 'https://cdn/proof.jpg', `-> ${r.status} ${JSON.stringify(r.body?.order?.completion_photo_url)}`);
+    ok('completed order has maps_link', !!r.body?.order?.maps_link, `-> ${r.body?.order?.maps_link}`);
+    ok('completed order masks rider phone', typeof r.body?.order?.rider_phone === 'string' && r.body.order.rider_phone.includes('*'), `-> ${r.body?.order?.rider_phone}`);
+
+    r = await req('GET', `/orders/${order2}`, { token: cust2Token });
+    ok('active order exposes unmasked customer phone', r.status === 200 && typeof r.body?.order?.customer_phone === 'string' && !r.body.order.customer_phone.includes('*'), `-> ${r.body?.order?.customer_phone}`);
+    ok('active order has maps_link', !!r.body?.order?.maps_link, `-> ${r.body?.order?.maps_link}`);
+
+    console.log('\n── S6: Engagement & safety ──');
+    r = await req('GET', '/riders/incentives', { token: riderToken });
+    ok('incentives list returned (>=2 seeded)', r.status === 200 && Array.isArray(r.body?.incentives) && r.body.incentives.length >= 2, `-> ${r.status} n=${r.body?.incentives?.length}`);
+    ok('every incentive has numeric progress', (r.body?.incentives || []).every((i) => typeof i.progress === 'number'), `-> ${JSON.stringify((r.body?.incentives || []).map((i) => i.progress))}`);
+    r = await req('POST', '/riders/sos', { token: riderToken, body: { lat: 5.6037, lng: -0.1870, note: 'flat tyre' } });
+    ok('sos logged 201', r.status === 201 && !!r.body?.sos_id, `-> ${r.status} ${JSON.stringify(r.body)}`);
+
+    console.log('\n── P: Payments — rider payouts ──');
+    r = await req('POST', '/riders/payout-recipients', { token: riderToken, body: { type: 'mobile_money', provider: 'MTN', account_number: '0241234602', account_name: 'Test Rider', is_default: true } });
+    ok('save payout recipient 201', r.status === 201 && !!r.body?.recipient?.id, `-> ${r.status} ${JSON.stringify(r.body)}`);
+    r = await req('GET', '/riders/payout-recipients', { token: riderToken });
+    ok('list recipients >= 1', r.status === 200 && (r.body?.recipients || []).length >= 1, `-> ${r.status}`);
+
+    r = await req('POST', '/riders/payout', { token: riderToken, body: { amount: 5 } });
+    ok('withdraw 5 -> processing 201', r.status === 201 && r.body?.payout?.status === 'processing', `-> ${r.status} ${JSON.stringify(r.body)}`);
+    const transferCode = r.body?.payout?.paystack_transfer_code;
+
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('wallet debited to 3 after payout', Number(r.body?.wallet?.balance) === 3, `-> ${r.body?.wallet?.balance}`);
+    ok('wallet total_withdrawn = 5', Number(r.body?.wallet?.total_withdrawn) === 5, `-> ${r.body?.wallet?.total_withdrawn}`);
+
+    r = await req('POST', '/riders/payout', { token: riderToken, body: { amount: 1 } });
+    ok('withdraw below min -> 400', r.status === 400, `-> ${r.status}`);
+
+    const twBody = JSON.stringify({ event: 'transfer.success', data: { transfer_code: transferCode } });
+    const twSig = crypto.createHmac('sha512', secret).update(twBody).digest('hex');
+    r = await req('POST', '/payments/transfer-webhook', { body: twBody, headers: { 'x-paystack-signature': 'bad' } });
+    ok('transfer webhook bad sig -> 400', r.status === 400, `-> ${r.status}`);
+    r = await req('POST', '/payments/transfer-webhook', { body: twBody, headers: { 'x-paystack-signature': twSig } });
+    ok('transfer webhook success -> 200', r.status === 200, `-> ${r.status}`);
+    r = await req('GET', '/riders/payouts', { token: riderToken });
+    const po = (r.body?.payouts || []).find((p) => p.paystack_transfer_code === transferCode);
+    ok('payout settled to paid', !!po && po.status === 'paid', `-> ${JSON.stringify(po?.status)}`);
+    r = await req('POST', '/payments/transfer-webhook', { body: twBody, headers: { 'x-paystack-signature': twSig } });
+    ok('transfer webhook idempotent resend -> 200', r.status === 200, `-> ${r.status}`);
+    r = await req('GET', '/riders/wallet', { token: riderToken });
+    ok('wallet unchanged after idempotent resend = 3', Number(r.body?.wallet?.balance) === 3, `-> ${r.body?.wallet?.balance}`);
 
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });

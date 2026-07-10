@@ -13,6 +13,11 @@ const VALID_TRANSITIONS = {
   rider_arrived:  ['size_confirmed'],
 };
 
+// S5 (#6): mask a phone (keep last 3 digits) once a job is no longer active,
+// so customer/rider contact is only exposed while coordinating a live pickup.
+const maskPhone = (p) => (p ? String(p).replace(/.(?=.{3})/g, '*') : p);
+const ACTIVE_ORDER = (status) => !['completed', 'cancelled'].includes(status);
+
 // ── Create order (customer) ────────────────────────────────────
 exports.createOrder = asyncHandler(async (req, res) => {
   const { pickup_address, pickup_lat, pickup_lng, waste_type, waste_description } = req.body;
@@ -58,6 +63,20 @@ exports.acceptOrder = asyncHandler(async (req, res) => {
     await client.query(
       `UPDATE orders SET rider_id=$1, status='accepted', accepted_at=NOW() WHERE id=$2`,
       [riderId, id]
+    );
+    // S2 (#3): track accepted jobs for the rider reliability score.
+    await client.query(
+      `UPDATE rider_profiles SET accepted_count = accepted_count + 1 WHERE user_id=$1`,
+      [riderId]
+    );
+    // S3 (#4): mark this rider's offer accepted, expire everyone else's.
+    await client.query(
+      `UPDATE order_offers SET status='accepted' WHERE order_id=$1 AND rider_id=$2`,
+      [id, riderId]
+    );
+    await client.query(
+      `UPDATE order_offers SET status='expired' WHERE order_id=$1 AND rider_id<>$2 AND status='offered'`,
+      [id, riderId]
     );
     await client.query('COMMIT');
 
@@ -207,28 +226,72 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
 });
 
 // ── Rider: complete order ──────────────────────────────────────
+// S1 (#2): rider earnings + wallet credit happen in ONE transaction. The
+// wallet is credited only when a NEW rider_earnings row is inserted (idempotent
+// on order_id) so a retry can never double-credit. Customer points are awarded
+// after commit (awardPoints runs its own transaction).
 exports.completeOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { completion_photo_url } = req.body || {};
 
-  const { rows } = await db.query(
-    `SELECT * FROM orders WHERE id=$1 AND rider_id=$2 AND status='in_progress'`,
-    [id, req.user.id]
-  );
-  if (!rows.length)
-    return res.status(404).json({ success: false, error: 'Order not found or not in progress' });
+  const client = await db.getClient();
+  let order;
+  let net = 0;
+  try {
+    await client.query('BEGIN');
 
-  const order = rows[0];
-  await db.query(`UPDATE orders SET status='completed', completed_at=NOW() WHERE id=$1`, [id]);
+    const { rows } = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND rider_id=$2 AND status='in_progress' FOR UPDATE`,
+      [id, req.user.id]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Order not found or not in progress' });
+    }
+    order = rows[0];
 
-  const gross      = parseFloat(order.final_price || 0);
-  const commission = Math.round(gross * parseFloat(process.env.PLATFORM_COMMISSION || '0.20') * 100) / 100;
-  const net        = Math.round((gross - commission) * 100) / 100;
+    await client.query(
+      `UPDATE orders SET status='completed', completed_at=NOW(),
+         completion_photo_url=COALESCE($2, completion_photo_url)
+       WHERE id=$1`,
+      [id, completion_photo_url || null]
+    );
 
-  await db.query(
-    `INSERT INTO rider_earnings (rider_id, order_id, gross, commission, net)
-     VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING`,
-    [req.user.id, id, gross, commission, net]
-  );
+    const gross      = parseFloat(order.final_price || 0);
+    const commission = Math.round(gross * parseFloat(process.env.PLATFORM_COMMISSION || '0.20') * 100) / 100;
+    net              = Math.round((gross - commission) * 100) / 100;
+
+    const earning = await client.query(
+      `INSERT INTO rider_earnings (rider_id, order_id, gross, commission, net)
+       VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING RETURNING id`,
+      [req.user.id, id, gross, commission, net]
+    );
+
+    // Credit the rider wallet only on the first (non-conflicting) earnings insert.
+    if (earning.rows.length) {
+      await client.query(
+        `INSERT INTO rider_wallets (user_id, balance, total_earned)
+         VALUES ($1,$2,$2)
+         ON CONFLICT (user_id) DO UPDATE
+           SET balance      = rider_wallets.balance + $2,
+               total_earned = rider_wallets.total_earned + $2,
+               updated_at   = NOW()`,
+        [req.user.id, net]
+      );
+      // S2 (#3): track completed jobs for the rider reliability score.
+      await client.query(
+        `UPDATE rider_profiles SET completed_count = completed_count + 1 WHERE user_id=$1`,
+        [req.user.id]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   const points = calculatePoints({ wasteType: order.waste_type, wasteSize: order.waste_size });
   await awardPoints(order.customer_id, id, points);
@@ -268,7 +331,17 @@ exports.getOrder = asyncHandler(async (req, res) => {
   );
 
   if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found' });
-  res.json({ success: true, order: rows[0] });
+
+  const order = rows[0];
+  // S5 (#6): navigation deep-link for the rider + contact masking after the job ends.
+  order.maps_link = (order.pickup_lat != null && order.pickup_lng != null)
+    ? `https://www.google.com/maps/dir/?api=1&destination=${order.pickup_lat},${order.pickup_lng}`
+    : null;
+  if (!ACTIVE_ORDER(order.status)) {
+    order.customer_phone = maskPhone(order.customer_phone);
+    order.rider_phone = maskPhone(order.rider_phone);
+  }
+  res.json({ success: true, order });
 });
 
 // ── List orders ────────────────────────────────────────────────
@@ -324,6 +397,73 @@ exports.rateOrder = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, error: 'Order not found or not completed' });
 
   res.json({ success: true, message: 'Rating submitted' });
+});
+
+// ── Customer: rate the rider (S2 #3) ───────────────────────────
+// Recomputes the rider's running average atomically. Idempotent: the
+// `rider_rating IS NULL` guard prevents re-rating the same order.
+exports.rateRider = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { rating, review } = req.body;
+
+  if (!rating || rating < 1 || rating > 5)
+    return res.status(400).json({ success: false, error: 'Rating must be 1-5' });
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE orders SET rider_rating=$1, rider_review=$2
+       WHERE id=$3 AND customer_id=$4 AND status='completed'
+         AND rider_id IS NOT NULL AND rider_rating IS NULL
+       RETURNING rider_id`,
+      [rating, review || null, id, req.user.id]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, error: 'Order not found, not completed, or already rated' });
+    }
+
+    await client.query(
+      `UPDATE rider_profiles
+       SET rating_avg   = ROUND(((rating_avg * rating_count) + $1) / (rating_count + 1), 2),
+           rating_count = rating_count + 1
+       WHERE user_id=$2`,
+      [rating, rows[0].rider_id]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  res.json({ success: true, message: 'Rider rated' });
+});
+
+// ── Rider: decline an offered order (S3 #4) ────────────────────
+exports.declineOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const { rows } = await db.query(
+    `UPDATE order_offers SET status='declined'
+     WHERE order_id=$1 AND rider_id=$2 AND status='offered'
+     RETURNING id`,
+    [id, req.user.id]
+  );
+
+  // Only count a real decline (an offer that was actually outstanding).
+  if (rows.length) {
+    await db.query(
+      `UPDATE rider_profiles SET declined_count = declined_count + 1 WHERE user_id=$1`,
+      [req.user.id]
+    );
+  }
+
+  res.json({ success: true, message: 'Offer declined' });
 });
 
 // ── Rider: start in-progress ───────────────────────────────────

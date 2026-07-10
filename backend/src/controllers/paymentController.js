@@ -192,3 +192,6 @@ exports.verifyPayment = asyncHandler(async (req, res) => {
   const psRes = await paystackRequest('GET', `/transaction/verify/${reference}`);
   res.json({ success: psRes.status, data: psRes.data });
 });
+
+// Exported so the payout controller can reuse the Paystack HTTP helper.
+exports.paystackRequest = paystackRequest;
