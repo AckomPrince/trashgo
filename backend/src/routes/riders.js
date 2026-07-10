@@ -10,5 +10,7 @@ router.get('/profile',        auth(['rider']), ctrl.getProfile);
 router.get('/onboarding',     auth(['rider']), ctrl.getOnboarding);
 router.patch('/documents',    auth(['rider']), ctrl.uploadDocument);
 router.get('/nearby-orders',  auth(['rider']), ctrl.getNearbyOrders);
+router.get('/incentives',     auth(['rider']), ctrl.getIncentives);
+router.post('/sos',           auth(['rider']), ctrl.sos);
 
 module.exports = router;

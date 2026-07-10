@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { notify } = require('../services/notificationService');
 
 // ── Toggle online/offline ──────────────────────────────────────
 exports.setAvailability = asyncHandler(async (req, res) => {
@@ -132,6 +133,57 @@ exports.getOnboarding = asyncHandler(async (req, res) => {
       approval_status: p.status,
     },
   });
+});
+
+// ── Rider incentives + progress (S6 #7) ────────────────────────
+exports.getIncentives = asyncHandler(async (req, res) => {
+  const { rows: incentives } = await db.query(
+    `SELECT id, type, title, description, target, reward_cash, reward_points, period, status
+     FROM rider_incentives
+     WHERE status='active' AND (rider_id IS NULL OR rider_id=$1)
+     ORDER BY created_at`,
+    [req.user.id]
+  );
+
+  const { rows: c } = await db.query(
+    `SELECT COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)               AS today,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')  AS week,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS month
+     FROM rider_earnings WHERE rider_id=$1`,
+    [req.user.id]
+  );
+  const counts = c[0] || { today: 0, week: 0, month: 0 };
+  const periodKey = { daily: 'today', weekly: 'week', monthly: 'month' };
+
+  const withProgress = incentives.map((i) => {
+    const progress = parseInt(counts[periodKey[i.period] || 'week'] || 0, 10);
+    return { ...i, progress, achieved: progress >= i.target };
+  });
+
+  res.json({ success: true, incentives: withProgress });
+});
+
+// ── Rider SOS (S6 #7) ──────────────────────────────────────────
+exports.sos = asyncHandler(async (req, res) => {
+  const { order_id, lat, lng, note } = req.body;
+
+  const { rows } = await db.query(
+    `INSERT INTO rider_sos_events (rider_id, order_id, lat, lng, note)
+     VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at`,
+    [req.user.id, order_id || null, lat || null, lng || null, note || null]
+  );
+
+  // Alert every active admin.
+  const { rows: admins } = await db.query(`SELECT id FROM users WHERE role='admin' AND is_active=TRUE`);
+  for (const a of admins) {
+    await notify(a.id, {
+      title: '🆘 Rider SOS',
+      body: `A rider triggered SOS${note ? ': ' + note : ''}.`,
+      data: { type: 'rider_sos', rider_id: req.user.id, sos_id: rows[0].id },
+    });
+  }
+
+  res.status(201).json({ success: true, sos_id: rows[0].id, created_at: rows[0].created_at });
 });
 
 // ── Get nearby orders (for rider to see what's available) ─────

@@ -66,8 +66,8 @@ before withdrawal even exists).
 | S3 | Smart Dispatch & Job Feed | #4 | DONE | Offers + decline + estimated earnings + rating tie-break. 59/59 smoke |
 | S4 | Rider Onboarding & Verification | #5 | DONE | Ghana Card + vehicle photo + onboarding steps. 65/65 smoke |
 | S5 | Job Execution Polish | #6 | DONE | Proof photo + maps link + contact masking. 70/70 smoke |
-| S6 | Engagement & Safety | #7 | IN PROGRESS | Streaks/incentives, SOS |
-| P  | Payments — Payouts to MoMo/Bank | #8 | TODO | LAST. Depends on S1. Flexible/quick/seamless |
+| S6 | Engagement & Safety | #7 | DONE | Incentives + progress + SOS. 73/73 smoke |
+| P  | Payments — Payouts to MoMo/Bank | #8 | IN PROGRESS | Depends on S1. Flexible/quick/seamless |
 
 Legend: TODO · IN PROGRESS · IN REVIEW · DONE · BLOCKED
 
@@ -248,11 +248,11 @@ Stories
   under-served areas (foundation only for MVP).
 
 Acceptance criteria
-- [ ] Migration: `rider_incentives(id, rider_id, type, criteria, reward_points_or_cash, period, status)`;
+- [x] Migration: `rider_incentives(id, rider_id, type, criteria, reward_points_or_cash, period, status)`;
       `rider_sos_events(id, rider_id, order_id, lat, lng, created_at)`.
-- [ ] `GET /riders/incentives` lists active incentives + progress.
-- [ ] `POST /riders/sos` logs an SOS event + notifies admin (notification row).
-- [ ] Unit + smoke tests.
+- [x] `GET /riders/incentives` lists active incentives + progress.
+- [x] `POST /riders/sos` logs an SOS event + notifies admin (notification row).
+- [x] Unit + smoke tests.
 
 Technical notes
 - Incentive evaluation can be a daily job later; MVP stores definitions +

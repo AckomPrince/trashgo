@@ -243,6 +243,13 @@ async function req(method, path, { token, body, headers } = {}) {
     ok('active order exposes unmasked customer phone', r.status === 200 && typeof r.body?.order?.customer_phone === 'string' && !r.body.order.customer_phone.includes('*'), `-> ${r.body?.order?.customer_phone}`);
     ok('active order has maps_link', !!r.body?.order?.maps_link, `-> ${r.body?.order?.maps_link}`);
 
+    console.log('\n── S6: Engagement & safety ──');
+    r = await req('GET', '/riders/incentives', { token: riderToken });
+    ok('incentives list returned (>=2 seeded)', r.status === 200 && Array.isArray(r.body?.incentives) && r.body.incentives.length >= 2, `-> ${r.status} n=${r.body?.incentives?.length}`);
+    ok('every incentive has numeric progress', (r.body?.incentives || []).every((i) => typeof i.progress === 'number'), `-> ${JSON.stringify((r.body?.incentives || []).map((i) => i.progress))}`);
+    r = await req('POST', '/riders/sos', { token: riderToken, body: { lat: 5.6037, lng: -0.1870, note: 'flat tyre' } });
+    ok('sos logged 201', r.status === 201 && !!r.body?.sos_id, `-> ${r.status} ${JSON.stringify(r.body)}`);
+
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });
     ok('refresh rotates token 200', r.status === 200 && r.body?.token && r.body?.refresh_token !== custRefresh, `-> ${r.status}`);
