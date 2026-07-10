@@ -60,14 +60,23 @@ class ApiService {
   Future<Map<String, dynamic>> startPickup(String orderId) =>
       _patch('/orders/$orderId/start', {});
 
-  Future<Map<String, dynamic>> completeOrder(String orderId) =>
-      _patch('/orders/$orderId/complete', {});
+  Future<Map<String, dynamic>> completeOrder(String orderId, {String? completionPhotoUrl}) =>
+      _patch('/orders/$orderId/complete', {
+        if (completionPhotoUrl != null) 'completion_photo_url': completionPhotoUrl,
+      });
 
   Future<Map<String, dynamic>> cancelOrder(String orderId, {String? reason}) =>
       _patch('/orders/$orderId/cancel', {'reason': reason});
 
   Future<Map<String, dynamic>> rateOrder(String orderId, int rating, {String? review}) =>
       _post('/orders/$orderId/rate', {'rating': rating, 'review': review});
+
+  // S3: decline an offered order · S2: rate the rider
+  Future<Map<String, dynamic>> declineOrder(String orderId) =>
+      _post('/orders/$orderId/decline', {});
+
+  Future<Map<String, dynamic>> rateRider(String orderId, int rating, {String? review}) =>
+      _post('/orders/$orderId/rate-rider', {'rating': rating, 'review': review});
 
   // ── Riders ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> setAvailability(bool online) =>
@@ -84,6 +93,42 @@ class ApiService {
         if (lat != null) 'lat': lat,
         if (lng != null) 'lng': lng,
       });
+
+  // S1: wallet · S4: onboarding/docs · S6: incentives + SOS
+  Future<Map<String, dynamic>> getRiderWallet() => _get('/riders/wallet');
+
+  Future<Map<String, dynamic>> getOnboarding() => _get('/riders/onboarding');
+
+  Future<Map<String, dynamic>> uploadDocument(String docType, String url, {String? ghanaCardNumber}) =>
+      _patch('/riders/documents', {
+        'doc_type': docType,
+        'url': url,
+        if (ghanaCardNumber != null) 'ghana_card_number': ghanaCardNumber,
+      });
+
+  Future<Map<String, dynamic>> getIncentives() => _get('/riders/incentives');
+
+  Future<Map<String, dynamic>> sos({String? orderId, double? lat, double? lng, String? note}) =>
+      _post('/riders/sos', {
+        if (orderId != null) 'order_id': orderId,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+        if (note != null) 'note': note,
+      });
+
+  // P: payouts to MoMo / bank
+  Future<Map<String, dynamic>> getPayoutRecipients() => _get('/riders/payout-recipients');
+
+  Future<Map<String, dynamic>> createPayoutRecipient(Map<String, dynamic> data) =>
+      _post('/riders/payout-recipients', data);
+
+  Future<Map<String, dynamic>> initiatePayout({required double amount, String? recipientId}) =>
+      _post('/riders/payout', {
+        'amount': amount,
+        if (recipientId != null) 'recipient_id': recipientId,
+      });
+
+  Future<Map<String, dynamic>> getPayouts() => _get('/riders/payouts');
 
   // ── Rewards ────────────────────────────────────────────────
   Future<Map<String, dynamic>> getWallet() => _get('/rewards/wallet');

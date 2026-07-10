@@ -68,16 +68,16 @@ export default function Riders() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#F5F5F5' }}>
-              {['Name', 'Phone', 'Email', 'Vehicle', 'Registered', 'Status', 'Actions'].map(h => (
+              {['Name', 'Phone', 'Email', 'Vehicle', 'Rating', 'Registered', 'Status', 'Actions'].map(h => (
                 <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#757575', textTransform: 'uppercase' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading…</td></tr>
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading…</td></tr>
             ) : riders.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No {status} riders</td></tr>
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No {status} riders</td></tr>
             ) : riders.map(r => (
               <tr key={r.id} style={{ borderTop: '1px solid #F5F5F5' }}>
                 <td style={{ padding: '12px 16px' }}>
@@ -95,6 +95,9 @@ export default function Riders() {
                     <Truck size={14} color="#999" />
                     {r.vehicle_type || '—'}
                   </div>
+                </td>
+                <td style={{ padding: '12px 16px', fontSize: 13 }}>
+                  {Number(r.rating_count) > 0 ? `⭐ ${Number(r.rating_avg).toFixed(1)} (${r.rating_count})` : '—'}
                 </td>
                 <td style={{ padding: '12px 16px', fontSize: 12, color: '#757575' }}>
                   {new Date(r.created_at).toLocaleDateString()}
@@ -139,6 +142,10 @@ export default function Riders() {
                 ['Phone', selected.phone],
                 ['Vehicle', selected.vehicle_type || '—'],
                 ['Plate', selected.vehicle_plate || '—'],
+                ['Ghana Card', selected.ghana_card_number || '—'],
+                ['Rating', Number(selected.rating_count) > 0 ? `⭐ ${Number(selected.rating_avg).toFixed(1)} (${selected.rating_count})` : 'No ratings'],
+                ['Completed jobs', selected.completed_count ?? 0],
+                ['Reliability', Number(selected.accepted_count) > 0 ? `${Math.round((selected.completed_count / selected.accepted_count) * 100)}%` : '—'],
                 ['Status', selected.status],
                 ['Joined', new Date(selected.created_at).toLocaleDateString()],
               ].map(([l, v]) => (
@@ -148,9 +155,16 @@ export default function Riders() {
                 </div>
               ))}
             </div>
-            {selected.id_document_url && (
-              <a href={selected.id_document_url} target="_blank" rel="noreferrer" style={{ color: G, fontSize: 13 }}>View ID Document ↗</a>
-            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginBottom: 4 }}>
+              {[
+                ['ID Document', selected.id_document_url],
+                ['Ghana Card', selected.ghana_card_url],
+                ['Vehicle Photo', selected.vehicle_photo_url],
+                ['License', selected.license_url],
+              ].filter(([, url]) => !!url).map(([label, url]) => (
+                <a key={label} href={url} target="_blank" rel="noreferrer" style={{ color: G, fontSize: 13, fontWeight: 500 }}>View {label} ↗</a>
+              ))}
+            </div>
             <div style={{ marginTop: 16 }}>
               <label style={{ fontSize: 13, fontWeight: 500 }}>Note (optional)</label>
               <textarea value={actionNote} onChange={e => setActionNote(e.target.value)} rows={2} style={{ width: '100%', marginTop: 6, padding: '10px 12px', border: '1px solid #E0E0E0', borderRadius: 10, fontSize: 13, resize: 'none', boxSizing: 'border-box' }} placeholder="Add a note..." />

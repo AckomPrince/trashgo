@@ -65,6 +65,7 @@ exports.listRiders = asyncHandler(async (req, res) => {
       `SELECT u.id, u.full_name, u.email, u.phone, u.created_at,
               rp.vehicle_type, rp.vehicle_plate, rp.id_document_url,
               rp.license_url, rp.ghana_card_number, rp.ghana_card_url, rp.vehicle_photo_url,
+              rp.rating_avg, rp.rating_count, rp.completed_count, rp.accepted_count,
               rp.status, rp.is_online, rp.approved_at, rp.admin_note
        FROM users u JOIN rider_profiles rp ON rp.user_id=u.id
        WHERE rp.status=$1

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../data/services/api_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -25,6 +26,13 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+            tooltip: 'Wallet & Payouts',
+            onPressed: () => context.push('/rider/wallet'),
+          ),
+        ],
       ),
       body: Column(children: [
         // ── Period segmented control

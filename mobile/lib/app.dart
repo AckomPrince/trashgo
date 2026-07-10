@@ -18,6 +18,7 @@ import 'presentation/screens/user/rewards_wallet_screen.dart';
 import 'presentation/screens/rider/rider_home_screen.dart';
 import 'presentation/screens/rider/active_pickup_screen.dart';
 import 'presentation/screens/rider/earnings_screen.dart';
+import 'presentation/screens/rider/rider_wallet_screen.dart';
 import 'presentation/screens/shared/notifications_screen.dart';
 import 'presentation/screens/shared/profile_screen.dart';
 
@@ -79,6 +80,7 @@ class _TrashGoAppState extends ConsumerState<TrashGoApp> {
         GoRoute(path: '/rider/home',       builder: (_, __) => const RiderHomeScreen()),
         GoRoute(path: '/rider/active/:id', builder: (_, s)  => ActivePickupScreen(orderId: s.pathParameters['id']!)),
         GoRoute(path: '/rider/earnings',   builder: (_, __) => const EarningsScreen()),
+        GoRoute(path: '/rider/wallet',     builder: (_, __) => const RiderWalletScreen()),
 
         // Shared
         GoRoute(path: '/notifications',    builder: (_, __) => const NotificationsScreen()),
