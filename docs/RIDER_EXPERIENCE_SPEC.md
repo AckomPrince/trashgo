@@ -65,8 +65,8 @@ before withdrawal even exists).
 | S2 | Rider Ratings & Reliability | #3 | DONE | rate-rider + avg + counters + reliability. 54/54 smoke |
 | S3 | Smart Dispatch & Job Feed | #4 | DONE | Offers + decline + estimated earnings + rating tie-break. 59/59 smoke |
 | S4 | Rider Onboarding & Verification | #5 | DONE | Ghana Card + vehicle photo + onboarding steps. 65/65 smoke |
-| S5 | Job Execution Polish | #6 | IN PROGRESS | Proof photo, contact, nav |
-| S6 | Engagement & Safety | #7 | TODO | Streaks/incentives, SOS |
+| S5 | Job Execution Polish | #6 | DONE | Proof photo + maps link + contact masking. 70/70 smoke |
+| S6 | Engagement & Safety | #7 | IN PROGRESS | Streaks/incentives, SOS |
 | P  | Payments — Payouts to MoMo/Bank | #8 | TODO | LAST. Depends on S1. Flexible/quick/seamless |
 
 Legend: TODO · IN PROGRESS · IN REVIEW · DONE · BLOCKED
@@ -223,11 +223,11 @@ Stories
   navigate.
 
 Acceptance criteria
-- [ ] Migration: `orders.completion_photo_url`.
-- [ ] `completeOrder` accepts optional `completion_photo_url` and stores it.
-- [ ] `GET /orders/:id` returns a maps deep-link payload (lat/lng already
+- [x] Migration: `orders.completion_photo_url`.
+- [x] `completeOrder` accepts optional `completion_photo_url` and stores it.
+- [x] `GET /orders/:id` returns a maps deep-link payload (lat/lng already
       present) and masked counterpart phone during active states.
-- [ ] Unit + smoke tests.
+- [x] Unit + smoke tests.
 
 Technical notes
 - Masking: expose phone only while order is active (not completed/cancelled).

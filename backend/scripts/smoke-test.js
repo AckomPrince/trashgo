@@ -161,7 +161,7 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('PATCH', `/orders/${orderId}/start`, { token: riderToken });
     ok('rider start -> in_progress 200', r.status === 200, `-> ${r.status} ${JSON.stringify(r.body)}`);
 
-    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken });
+    r = await req('PATCH', `/orders/${orderId}/complete`, { token: riderToken, body: { completion_photo_url: 'https://cdn/proof.jpg' } });
     ok('rider complete 200', r.status === 200 && r.body?.points_awarded === 70, `-> ${r.status} ${JSON.stringify(r.body)}`);
     ok('rider net earning = 8 (10 - 20%)', r.body?.rider_net_earning === 8, `-> ${r.body?.rider_net_earning}`);
 
@@ -232,6 +232,16 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('GET', '/admin/riders?status=approved', { token: adminToken });
     const rprof = (r.body?.riders || []).find((x) => x.id === riderId);
     ok('admin riders list exposes ghana_card_url', !!rprof && !!rprof.ghana_card_url, `-> ${JSON.stringify(rprof?.ghana_card_url)}`);
+
+    console.log('\n── S5: Job execution polish ──');
+    r = await req('GET', `/orders/${orderId}`, { token: custToken });
+    ok('completed order returns completion_photo_url', r.status === 200 && r.body?.order?.completion_photo_url === 'https://cdn/proof.jpg', `-> ${r.status} ${JSON.stringify(r.body?.order?.completion_photo_url)}`);
+    ok('completed order has maps_link', !!r.body?.order?.maps_link, `-> ${r.body?.order?.maps_link}`);
+    ok('completed order masks rider phone', typeof r.body?.order?.rider_phone === 'string' && r.body.order.rider_phone.includes('*'), `-> ${r.body?.order?.rider_phone}`);
+
+    r = await req('GET', `/orders/${order2}`, { token: cust2Token });
+    ok('active order exposes unmasked customer phone', r.status === 200 && typeof r.body?.order?.customer_phone === 'string' && !r.body.order.customer_phone.includes('*'), `-> ${r.body?.order?.customer_phone}`);
+    ok('active order has maps_link', !!r.body?.order?.maps_link, `-> ${r.body?.order?.maps_link}`);
 
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });

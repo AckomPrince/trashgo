@@ -13,6 +13,11 @@ const VALID_TRANSITIONS = {
   rider_arrived:  ['size_confirmed'],
 };
 
+// S5 (#6): mask a phone (keep last 3 digits) once a job is no longer active,
+// so customer/rider contact is only exposed while coordinating a live pickup.
+const maskPhone = (p) => (p ? String(p).replace(/.(?=.{3})/g, '*') : p);
+const ACTIVE_ORDER = (status) => !['completed', 'cancelled'].includes(status);
+
 // ── Create order (customer) ────────────────────────────────────
 exports.createOrder = asyncHandler(async (req, res) => {
   const { pickup_address, pickup_lat, pickup_lng, waste_type, waste_description } = req.body;
@@ -227,6 +232,7 @@ exports.cancelOrder = asyncHandler(async (req, res) => {
 // after commit (awardPoints runs its own transaction).
 exports.completeOrder = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { completion_photo_url } = req.body || {};
 
   const client = await db.getClient();
   let order;
@@ -244,7 +250,12 @@ exports.completeOrder = asyncHandler(async (req, res) => {
     }
     order = rows[0];
 
-    await client.query(`UPDATE orders SET status='completed', completed_at=NOW() WHERE id=$1`, [id]);
+    await client.query(
+      `UPDATE orders SET status='completed', completed_at=NOW(),
+         completion_photo_url=COALESCE($2, completion_photo_url)
+       WHERE id=$1`,
+      [id, completion_photo_url || null]
+    );
 
     const gross      = parseFloat(order.final_price || 0);
     const commission = Math.round(gross * parseFloat(process.env.PLATFORM_COMMISSION || '0.20') * 100) / 100;
@@ -320,7 +331,17 @@ exports.getOrder = asyncHandler(async (req, res) => {
   );
 
   if (!rows.length) return res.status(404).json({ success: false, error: 'Order not found' });
-  res.json({ success: true, order: rows[0] });
+
+  const order = rows[0];
+  // S5 (#6): navigation deep-link for the rider + contact masking after the job ends.
+  order.maps_link = (order.pickup_lat != null && order.pickup_lng != null)
+    ? `https://www.google.com/maps/dir/?api=1&destination=${order.pickup_lat},${order.pickup_lng}`
+    : null;
+  if (!ACTIVE_ORDER(order.status)) {
+    order.customer_phone = maskPhone(order.customer_phone);
+    order.rider_phone = maskPhone(order.rider_phone);
+  }
+  res.json({ success: true, order });
 });
 
 // ── List orders ────────────────────────────────────────────────
