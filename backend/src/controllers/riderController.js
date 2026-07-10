@@ -99,27 +99,35 @@ exports.uploadDocument = asyncHandler(async (req, res) => {
 });
 
 // ── Get nearby orders (for rider to see what's available) ─────
+// S3 (#4): includes estimated_earning (medium-size price for the waste type,
+// minus platform commission) and excludes orders this rider already declined.
 exports.getNearbyOrders = asyncHandler(async (req, res) => {
   const { lat, lng, radius = 10 } = req.query;
+  const commission = parseFloat(process.env.PLATFORM_COMMISSION || '0.20');
+
+  const EST_PRICE_SUBQ = `(SELECT pc.price FROM pricing_config pc
+       WHERE pc.waste_type=o.waste_type AND pc.waste_size='medium' AND pc.is_active LIMIT 1)`;
+  const NOT_DECLINED = `NOT EXISTS (SELECT 1 FROM order_offers oo
+       WHERE oo.order_id=o.id AND oo.rider_id=$RIDER AND oo.status='declined')`;
 
   let rows;
   if (lat == null || lng == null) {
-    // FIX/MVP: return all unassigned requested orders without distance filtering.
-    // GPS-based matching will be added in a future update.
     const result = await db.query(
-      `SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at
+      `SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at,
+              ${EST_PRICE_SUBQ} AS est_price
        FROM orders o
        WHERE o.status='requested' AND o.rider_id IS NULL
+         AND ${NOT_DECLINED.replace('$RIDER', '$1')}
        ORDER BY o.requested_at DESC
-       LIMIT 20`
+       LIMIT 20`,
+      [req.user.id]
     );
     rows = result.rows;
   } else {
-    // FIX: use a subquery so the calculated distance can be filtered in the outer WHERE
-    // without requiring a GROUP BY clause.
     const result = await db.query(
       `SELECT * FROM (
          SELECT o.id, o.pickup_address, o.pickup_lat, o.pickup_lng, o.waste_type, o.requested_at,
+                ${EST_PRICE_SUBQ} AS est_price,
                 ROUND(
                   6371 * acos(
                     cos(radians($1)) * cos(radians(o.pickup_lat)) *
@@ -129,14 +137,22 @@ exports.getNearbyOrders = asyncHandler(async (req, res) => {
                 ) AS distance_km
          FROM orders o
          WHERE o.status='requested' AND o.rider_id IS NULL
+           AND ${NOT_DECLINED.replace('$RIDER', '$4')}
        ) sub
        WHERE distance_km <= $3
        ORDER BY distance_km
        LIMIT 20`,
-      [parseFloat(lat), parseFloat(lng), parseFloat(radius)]
+      [parseFloat(lat), parseFloat(lng), parseFloat(radius), req.user.id]
     );
     rows = result.rows;
   }
 
-  res.json({ success: true, orders: rows });
+  const orders = rows.map(({ est_price, ...o }) => ({
+    ...o,
+    estimated_earning: est_price != null
+      ? Math.round(parseFloat(est_price) * (1 - commission) * 100) / 100
+      : null,
+  }));
+
+  res.json({ success: true, orders });
 });

@@ -63,8 +63,8 @@ before withdrawal even exists).
 | — | Rider Experience → Payments (tracking) | #9 | IN PROGRESS | Epic |
 | S1 | Rider Wallet & Earnings Ledger | #2 | DONE | Ledger + accrual + GET /riders/wallet. 47/47 smoke |
 | S2 | Rider Ratings & Reliability | #3 | DONE | rate-rider + avg + counters + reliability. 54/54 smoke |
-| S3 | Smart Dispatch & Job Feed | #4 | IN PROGRESS | Depends on S1, S2 |
-| S4 | Rider Onboarding & Verification | #5 | TODO | Ghana Card + vehicle photos |
+| S3 | Smart Dispatch & Job Feed | #4 | DONE | Offers + decline + estimated earnings + rating tie-break. 59/59 smoke |
+| S4 | Rider Onboarding & Verification | #5 | IN PROGRESS | Ghana Card + vehicle photos |
 | S5 | Job Execution Polish | #6 | TODO | Proof photo, contact, nav |
 | S6 | Engagement & Safety | #7 | TODO | Streaks/incentives, SOS |
 | P  | Payments — Payouts to MoMo/Bank | #8 | TODO | LAST. Depends on S1. Flexible/quick/seamless |
@@ -160,16 +160,15 @@ Stories
   when broadcasting, so pickups are fulfilled faster.
 
 Acceptance criteria
-- [ ] `GET /riders/nearby-orders` includes `estimated_earning` (price − commission)
+- [x] `GET /riders/nearby-orders` includes `estimated_earning` (price − commission)
       and `distance_km` per order.
-- [ ] `matchingService` ordering: distance first, tie-broken by rider rating /
-      reliability (rider-side ranking retained; order broadcast prioritizes
-      better riders).
-- [ ] Migration: `order_offers(id, order_id, rider_id, status[offered|accepted|declined|expired], expires_at, created_at)`.
-- [ ] `POST /orders/:id/decline` (rider) marks the offer declined + bumps a
+- [x] `matchingService` ordering: distance first, tie-broken by rider rating /
+      reliability.
+- [x] Migration: `order_offers(id, order_id, rider_id, status[offered|accepted|declined|expired], expires_at, created_at)`.
+- [x] `POST /orders/:id/decline` (rider) marks the offer declined + bumps a
       decline counter; offers expire after `OFFER_TTL_SECONDS` (default 60).
-- [ ] `acceptOrder` respects an existing offer and closes sibling offers.
-- [ ] Unit + smoke tests (feed shows earnings; decline works; expiry logic).
+- [x] `acceptOrder` respects an existing offer and closes sibling offers.
+- [x] Unit + smoke tests (feed shows earnings; decline works; expiry logic).
 
 Technical notes
 - Keep the bounding-box + Haversine matching. Add ranking after distance.

@@ -196,6 +196,28 @@ async function req(method, path, { token, body, headers } = {}) {
     r = await req('GET', '/riders/wallet', { token: riderToken });
     ok('wallet unchanged after double-complete = 8', Number(r.body?.wallet?.balance) === 8, `-> ${r.body?.wallet?.balance}`);
 
+    console.log('\n── S3: Smart dispatch & job feed ──');
+    await req('PATCH', '/riders/availability', { token: riderToken, body: { online: true } });
+    await req('PATCH', '/riders/location', { token: riderToken, body: { lat: 5.6037, lng: -0.1870 } });
+
+    const cust2 = { full_name: 'Cust Two', email: `cust2${ts}@test.io`, phone: `+2337${String(ts).slice(-8)}`, password: 'Passw0rd!' };
+    r = await req('POST', '/auth/register/customer', { body: cust2 });
+    const cust2Token = r.body?.token;
+    r = await req('POST', '/orders', { token: cust2Token, body: { pickup_address: 'KNUST, Kumasi', pickup_lat: 5.6037, pickup_lng: -0.1870, waste_type: 'general' } });
+    const order2 = r.body?.order?.id;
+    ok('order2 created + riders notified >= 1', r.status === 201 && r.body?.riders_notified >= 1, `-> ${r.status} notified=${r.body?.riders_notified}`);
+
+    r = await req('GET', '/riders/nearby-orders', { token: riderToken });
+    const feedOrder = (r.body?.orders || []).find((o) => o.id === order2);
+    ok('nearby feed includes order2 w/ estimated_earning=8', !!feedOrder && Number(feedOrder.estimated_earning) === 8, `-> ${JSON.stringify(feedOrder)}`);
+
+    r = await req('POST', `/orders/${order2}/decline`, { token: riderToken });
+    ok('decline offer 200', r.status === 200, `-> ${r.status}`);
+    r = await req('GET', '/riders/nearby-orders', { token: riderToken });
+    ok('declined order2 excluded from feed', !(r.body?.orders || []).find((o) => o.id === order2), `-> still present?`);
+    r = await req('GET', '/riders/profile', { token: riderToken });
+    ok('rider declined_count >= 1', Number(r.body?.profile?.declined_count) >= 1, `-> ${r.body?.profile?.declined_count}`);
+
     console.log('\n── Refresh token rotation + logout ──');
     r = await req('POST', '/auth/refresh', { body: { refresh_token: custRefresh } });
     ok('refresh rotates token 200', r.status === 200 && r.body?.token && r.body?.refresh_token !== custRefresh, `-> ${r.status}`);

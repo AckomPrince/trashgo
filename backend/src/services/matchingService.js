@@ -40,7 +40,8 @@ async function findNearbyRiders(pickupLat, pickupLng, maxKm = 10, limit = 5) {
 
   const { rows } = await db.query(
     `SELECT u.id, u.full_name, u.phone, u.fcm_token,
-            rp.current_lat, rp.current_lng, rp.vehicle_type, rp.vehicle_plate
+            rp.current_lat, rp.current_lng, rp.vehicle_type, rp.vehicle_plate,
+            rp.rating_avg, rp.completed_count, rp.accepted_count
      FROM users u
      JOIN rider_profiles rp ON rp.user_id = u.id
      WHERE rp.is_online = TRUE
@@ -55,14 +56,19 @@ async function findNearbyRiders(pickupLat, pickupLng, maxKm = 10, limit = 5) {
     ]
   );
 
-  // Exact Haversine on the already-small bounding-box subset
+  // Exact Haversine on the already-small bounding-box subset.
+  // S3 (#4): rank by distance first, then break ties with the rider's rating
+  // (higher rated wins) so better riders are offered marginally-equal jobs first.
   return rows
     .map((r) => ({
       ...r,
       distance_km: haversine(pickupLat, pickupLng, r.current_lat, r.current_lng),
     }))
     .filter((r) => r.distance_km <= maxKm)
-    .sort((a, b) => a.distance_km - b.distance_km)
+    .sort((a, b) => {
+      if (Math.abs(a.distance_km - b.distance_km) > 0.25) return a.distance_km - b.distance_km;
+      return (parseFloat(b.rating_avg) || 0) - (parseFloat(a.rating_avg) || 0);
+    })
     .slice(0, limit);
 }
 
@@ -74,8 +80,18 @@ async function broadcastOrderToRiders(order) {
   if (!riders.length) return 0;
 
   const io = getIO();
+  const ttl = parseInt(process.env.OFFER_TTL_SECONDS || '60', 10);
 
   for (const rider of riders) {
+    // S3 (#4): persist the offer so the rider can decline it, it can expire,
+    // and accepting can close sibling offers. Idempotent per (order, rider).
+    await db.query(
+      `INSERT INTO order_offers (order_id, rider_id, status, expires_at)
+       VALUES ($1, $2, 'offered', NOW() + ($3 || ' seconds')::interval)
+       ON CONFLICT (order_id, rider_id) DO NOTHING`,
+      [order.id, rider.id, String(ttl)]
+    );
+
     io.to(`rider:${rider.id}`).emit('new_order_request', {
       order_id:       order.id,
       pickup_address: order.pickup_address,
@@ -83,6 +99,7 @@ async function broadcastOrderToRiders(order) {
       pickup_lat:     order.pickup_lat,
       pickup_lng:     order.pickup_lng,
       distance_km:    rider.distance_km.toFixed(1),
+      expires_in:     ttl,
     });
 
     if (rider.fcm_token) {

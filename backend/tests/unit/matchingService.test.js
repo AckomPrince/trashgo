@@ -59,6 +59,7 @@ describe('matchingService.findNearbyRiders', () => {
 
 describe('matchingService.broadcastOrderToRiders', () => {
   test('emits socket events and pushes FCM only to riders with a token', async () => {
+    db.query.mockResolvedValue({ rows: [] }); // default for the per-rider offer INSERTs
     db.query.mockResolvedValueOnce({
       rows: [
         { id: 'r1', current_lat: 5.60, current_lng: -0.20, fcm_token: 'tok-1' },

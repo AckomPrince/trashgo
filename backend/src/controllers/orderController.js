@@ -64,6 +64,15 @@ exports.acceptOrder = asyncHandler(async (req, res) => {
       `UPDATE rider_profiles SET accepted_count = accepted_count + 1 WHERE user_id=$1`,
       [riderId]
     );
+    // S3 (#4): mark this rider's offer accepted, expire everyone else's.
+    await client.query(
+      `UPDATE order_offers SET status='accepted' WHERE order_id=$1 AND rider_id=$2`,
+      [id, riderId]
+    );
+    await client.query(
+      `UPDATE order_offers SET status='expired' WHERE order_id=$1 AND rider_id<>$2 AND status='offered'`,
+      [id, riderId]
+    );
     await client.query('COMMIT');
 
     await notify(order.customer_id, {
@@ -412,6 +421,28 @@ exports.rateRider = asyncHandler(async (req, res) => {
   }
 
   res.json({ success: true, message: 'Rider rated' });
+});
+
+// ── Rider: decline an offered order (S3 #4) ────────────────────
+exports.declineOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const { rows } = await db.query(
+    `UPDATE order_offers SET status='declined'
+     WHERE order_id=$1 AND rider_id=$2 AND status='offered'
+     RETURNING id`,
+    [id, req.user.id]
+  );
+
+  // Only count a real decline (an offer that was actually outstanding).
+  if (rows.length) {
+    await db.query(
+      `UPDATE rider_profiles SET declined_count = declined_count + 1 WHERE user_id=$1`,
+      [req.user.id]
+    );
+  }
+
+  res.json({ success: true, message: 'Offer declined' });
 });
 
 // ── Rider: start in-progress ───────────────────────────────────
