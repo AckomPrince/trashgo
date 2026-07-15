@@ -1,23 +1,24 @@
 # TrashGo
 
-**On-demand waste pickup platform for Ghana — connecting households and businesses with nearby riders for cashless, trackable waste disposal.**
+**On-demand waste pickup platform for Ghana.** A full-stack monorepo connecting customers, riders, and administrators through a real-time logistics marketplace.
 
-TrashGo is a full-stack monorepo solving the urban waste management gap in Accra and beyond. Customers request pickups through a Flutter mobile app, riders receive real-time job notifications via Socket.IO and FCM, and an admin dashboard provides oversight with live analytics, rider management, dispute resolution, and dynamic pricing. Payments flow through Paystack (including MTN MoMo), and a points-based rewards system incentivizes consistent recycling.
+TrashGo solves the urban waste collection problem by matching households and businesses with nearby independent riders. Customers request pickups through a Flutter mobile app, riders receive real-time job notifications via Socket.IO and Firebase Cloud Messaging, and an admin dashboard provides operational oversight — rider approvals, pricing grids, dispute resolution, and analytics.
 
-Built for the Ghanaian market — designed for GHS currency, local mobile money payments, and reliable operation on modest infrastructure.
+Built for the Ghanaian market with Paystack payments (including MTN MoMo), GHS pricing, deep-green Material 3 design, and a PostgreSQL-backed Node.js API with integrated rewards and loyalty system.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Mobile | Flutter 3.x + Dart, Riverpod, Go Router, Dio |
-| Backend | Node.js 18 + Express 4, PostgreSQL 14, Socket.IO |
-| Admin UI | React 18 (Create React App) + Recharts |
+| Mobile | Flutter 3.x + Dart (Riverpod, Go Router) |
+| Backend | Node.js 18 + Express 4 |
+| Database | PostgreSQL 14 |
+| Real-time | Socket.IO |
 | Payments | Paystack (mobile_money + card) |
 | Maps | Google Maps Flutter SDK |
 | Push | Firebase Cloud Messaging |
-| Storage | Cloudinary |
-| Auth | JWT (short-lived access + rotated refresh tokens) |
+| Admin UI | React 18 + Recharts |
+| File Storage | Cloudinary |
 
 ## Quick Start
 
@@ -26,10 +27,9 @@ Built for the Ghanaian market — designed for GHS currency, local mobile money 
 ```bash
 cd backend
 npm install
-cp .env.example .env
-# Fill in credentials (DATABASE_URL, JWT_SECRET, PAYSTACK_SECRET_KEY, etc.)
+cp .env.example .env        # fill in credentials
 psql $DATABASE_URL -f src/migrations/001_schema.sql
-npm run dev
+npm run dev                 # nodemon on port 5000
 ```
 
 ### Mobile
@@ -37,8 +37,8 @@ npm run dev
 ```bash
 cd mobile
 flutter pub get
-# Configure Firebase (google-services.json / GoogleService-Info.plist)
-flutter run --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
+flutter run \
+  --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
   --dart-define=GOOGLE_MAPS_API_KEY=YOUR_KEY
 ```
 
@@ -47,21 +47,26 @@ flutter run --dart-define=API_BASE_URL=http://YOUR_SERVER_IP:5000/api/v1 \
 ```bash
 cd admin
 npm install
-cp .env.example .env
-npm start
+npm start                   # http://localhost:3000
+npm run build               # static build output
 ```
 
-## Architecture
+## Project Structure
 
-- **Mobile** — Flutter app with Riverpod state management, Go Router navigation, Socket.IO for real-time tracking, and Google Maps for pickup/delivery visualization.
-- **Backend** — Express REST API with JWT auth, Socket.IO for rider-customer matching and location streaming, Paystack webhook integration with HMAC-SHA512 verification, and PostgreSQL with parameterized queries.
-- **Admin** — React dashboard with Recharts analytics, rider approval workflow, order management with status filters, dispute resolution, and dynamic pricing grid.
+```
+trashgo/
+├── backend/          Node.js + Express REST API
+├── mobile/           Flutter cross-platform mobile app
+└── admin/            React admin dashboard
+```
 
-## Roles & Flows
+## Architecture Highlights
 
-- **Customer** — Register, request pickup, track rider in real-time, approve pricing, pay via Paystack/MoMo, earn rewards points.
-- **Rider** — Go online, receive job notifications, accept pickups, navigate to locations, complete jobs, track earnings.
-- **Admin** — Approve/reject riders, monitor live stats, manage orders and disputes, configure pricing.
+- **Order state machine** enforces valid status transitions from `requested` through to `completed` or `canceled`
+- **Rider matching** uses SQL bounding-box filtering then Haversine distance on the reduced set
+- **Paystack webhooks** verify HMAC-SHA512 signatures and are fully idempotent
+- **Refresh tokens** stored as SHA-256 hashes, rotated on each use
+- **Rewards system** — customers earn points per pickup, redeemable quarterly via MTN MoMo or bank transfer
 
 ## License
 
